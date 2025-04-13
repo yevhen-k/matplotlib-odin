@@ -354,3 +354,7 @@ PyObject* safe_import(PyObject* module, const char* fname) {
 
     return fn;
 }
+
+PyObject* PyArray_SimpleNewFromData_NP(int nd, npy_intp* dims, int typenum, void* data) {
+    return PyArray_SimpleNewFromData(nd, dims, typenum, data);
+}
