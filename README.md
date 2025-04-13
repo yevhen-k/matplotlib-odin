@@ -21,6 +21,8 @@ source venv310/bin/activate
 Compile and run sample:
 ```bash
 make all
+make bar
+./build/bin/bar
 ```
 
 ## References:
