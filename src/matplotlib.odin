@@ -135,6 +135,7 @@ foreign plt {
 	interpreter_delete :: proc(interpreter: ^Interpreter) ---
 
 	PyArray_SimpleNewFromData_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES, data: rawptr) -> PyObject ---
+	Py_DECREF_PY :: proc(o: PyObject) ---
 }
 
 @(default_calling_convention = "c")

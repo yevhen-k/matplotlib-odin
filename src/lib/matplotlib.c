@@ -121,7 +121,6 @@ Interpreter* interpreter_get() {
         PyObject* cmname  = PyString_FromString("matplotlib.cm");
         PyObject* pylabname  = PyString_FromString("pylab");
         if (!pyplotname || !pylabname || !matplotlibname || !cmname) {
-            //   throw std::runtime_error("couldnt create string");
             fprintf(stderr, "couldnt create string\n");
             return NULL;
         }
@@ -131,7 +130,6 @@ Interpreter* interpreter_get() {
         Py_DECREF(matplotlibname);
         if (!matplotlib) {
             PyErr_Print();
-            // throw std::runtime_error("Error loading module matplotlib!");
             fprintf(stderr, "Error loading module matplotlib!\n");
             return NULL;
         }
@@ -139,7 +137,8 @@ Interpreter* interpreter_get() {
         // matplotlib.use() must be called *before* pylab, matplotlib.pyplot,
         // or matplotlib.backends is imported for the first time
         if (strlen(s_backend) > 0) {
-            PyObject_CallMethod(matplotlib, "use", "s", s_backend);
+            PyObject* res = PyObject_CallMethod(matplotlib, "use", "s", s_backend);
+            Py_DECREF(res);
         }
 
         
@@ -358,3 +357,5 @@ PyObject* safe_import(PyObject* module, const char* fname) {
 PyObject* PyArray_SimpleNewFromData_NP(int nd, npy_intp* dims, int typenum, void* data) {
     return PyArray_SimpleNewFromData(nd, dims, typenum, data);
 }
+
+void Py_DECREF_PY(PyObject *o) { Py_DECREF(o); }
