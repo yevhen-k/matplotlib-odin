@@ -155,7 +155,7 @@ foreign py {
 PyString_FromString :: PyUnicode_FromString
 
 
-@(private = "file")
+@(private = "package")
 select_npy_type :: proc($T: typeid) -> NPY_TYPES {
 	when T == bool {
 		return .NPY_BOOL
@@ -186,7 +186,7 @@ select_npy_type :: proc($T: typeid) -> NPY_TYPES {
 	}
 }
 
-@(private = "file")
+@(private = "package")
 get_array :: proc(
 	v: []$T,
 ) -> PyObject where intrinsics.type_is_numeric(T) ||
@@ -195,6 +195,68 @@ get_array :: proc(
 	type: NPY_TYPES = select_npy_type(T)
 	varray: PyObject = PyArray_SimpleNewFromData_NP(1, &vsize, type, &v[0])
 	return varray
+}
+
+@(private = "package")
+bar_impl :: proc(
+	xarray: PyObject,
+	yarray: PyObject,
+	ec: string = "black",
+	ls: string = "-",
+	lw: f64 = 1.0,
+	keywords: map[string]string = {},
+) -> (
+	ok: bool,
+) {
+	kwargs: PyObject = PyDict_New()
+	assert(kwargs != nil)
+
+	PyDict_SetItemString(kwargs, "ec", PyString_FromString(strings.unsafe_string_to_cstring(ec)))
+	PyDict_SetItemString(kwargs, "ls", PyString_FromString(strings.unsafe_string_to_cstring(ls)))
+	PyDict_SetItemString(kwargs, "lw", PyFloat_FromDouble(lw))
+
+	for k, v in keywords {
+		PyDict_SetItemString(
+			kwargs,
+			strings.unsafe_string_to_cstring(k),
+			PyUnicode_FromString(strings.unsafe_string_to_cstring(v)),
+		)
+	}
+
+	plot_args: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(plot_args, 0, xarray)
+	PyTuple_SetItem(plot_args, 1, yarray)
+
+	assert(plot_args != nil)
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_bar, plot_args, kwargs)
+	ok = res != nil
+	if ok {
+		Py_DECREF_PY(res)
+	}
+	Py_DECREF_PY(plot_args)
+	Py_DECREF_PY(kwargs)
+
+	ok = true
+	return
+}
+
+bar5 :: proc(
+	x: []$T,
+	ec: string = "black",
+	ls: string = "-",
+	lw: f64 = 1.0,
+	keywords: map[string]string = {},
+) -> bool where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(x)
+
+	assert(xarray != nil)
+	assert(yarray != nil)
+
+	return bar_impl(xarray, yarray, ec, ls, lw, keywords)
 }
 
 bar6 :: proc(
@@ -214,44 +276,12 @@ bar6 :: proc(
 	assert(xarray != nil)
 	assert(yarray != nil)
 
-	kwargs: PyObject = PyDict_New()
-
-	PyDict_SetItemString(kwargs, "ec", PyString_FromString(strings.unsafe_string_to_cstring(ec)))
-	PyDict_SetItemString(kwargs, "ls", PyString_FromString(strings.unsafe_string_to_cstring(ls)))
-	PyDict_SetItemString(kwargs, "lw", PyFloat_FromDouble(lw))
-
-	assert(kwargs != nil)
-
-	for k, v in keywords {
-		PyDict_SetItemString(
-			kwargs,
-			strings.unsafe_string_to_cstring(k),
-			PyUnicode_FromString(strings.unsafe_string_to_cstring(v)),
-		)
-	}
-
-	plot_args: PyObject = PyTuple_New(2)
-	PyTuple_SetItem(plot_args, 0, xarray)
-	PyTuple_SetItem(plot_args, 1, yarray)
-
-	assert(plot_args != nil)
-
-	res: PyObject = PyObject_Call(interpreter_get().s_python_function_bar, plot_args, kwargs)
-	assert(interpreter_get().s_python_function_bar != nil)
-	assert(res != nil)
-
-	Py_DecRef(plot_args)
-	Py_DecRef(kwargs)
-	if res != nil do Py_DecRef(res)
-
-	// ????
-	// return res
-	ok = res != nil
-	return
+	return bar_impl(xarray, yarray, ec, ls, lw, keywords)
 }
 
 
 bar :: proc {
+	bar5,
 	bar6,
 }
 
@@ -273,16 +303,17 @@ show :: proc(block: bool = true) -> (ok: bool) {
 			interpreter_get().s_python_empty_tuple,
 			kwargs,
 		)
-		Py_DecRef(kwargs)
-		Py_DecRef(py_false)
+		Py_DECREF_PY(kwargs)
+		Py_DECREF_PY(py_false)
 	}
 
+	ok = true
 	if (res == nil) {
 		fmt.eprintln("Call to show() failed.")
 		ok = false
 	}
 
-	Py_DecRef(res)
+	Py_DECREF_PY(res)
 	return
 }
 
