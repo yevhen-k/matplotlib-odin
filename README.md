@@ -21,9 +21,10 @@ source venv310/bin/activate
 Compile and run sample:
 ```bash
 make all
-make bar
-./build/bin/bar
+make animation
+./build/bin/animation
 ```
+![](./examples/animation.gif)
 
 ## References:
 - https://docs.python.org/3.10/extending/embedding.html

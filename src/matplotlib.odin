@@ -11,10 +11,12 @@ when ODIN_OS == .Linux {
 	foreign import py "system:libpython3.10.so"
 }
 
-
+@(private = "package")
 PyObject :: distinct rawptr
+@(private = "package")
 Py_ssize_t :: uint
 
+@(private = "package")
 Interpreter :: struct {
 	s_python_function_arrow:           PyObject,
 	s_python_function_show:            PyObject,
@@ -75,8 +77,10 @@ Interpreter :: struct {
 	s_python_function_spy:             PyObject,
 }
 
+@(private = "package")
 npy_intp :: distinct uint // c.size_t
 
+@(private = "package")
 NPY_TYPES :: enum c.int {
 	NPY_BOOL = 0,
 	NPY_BYTE,
@@ -150,6 +154,10 @@ foreign py {
 	Py_DecRef :: proc(o: PyObject) ---
 	PyObject_CallObject :: proc(callable: PyObject, args: PyObject) -> PyObject ---
 	PyBool_FromLong :: proc(_: c.long) -> PyObject ---
+	PyList_SetItem :: proc(list: PyObject, index: Py_ssize_t, item: PyObject) -> i32 ---
+	PyTuple_GetItem :: proc(p: PyObject, pos: Py_ssize_t) -> PyObject ---
+	PyFloat_AsDouble :: proc(pyfloat: PyObject) -> f64 ---
+	PyList_New :: proc(len: Py_ssize_t) -> PyObject ---
 }
 
 PyString_FromString :: PyUnicode_FromString
@@ -191,6 +199,9 @@ get_array :: proc(
 	v: []$T,
 ) -> PyObject where intrinsics.type_is_numeric(T) ||
 	intrinsics.type_is_boolean(T) {
+
+	assert(len(v) > 0)
+
 	vsize: npy_intp = npy_intp(len(v))
 	type: NPY_TYPES = select_npy_type(T)
 	varray: PyObject = PyArray_SimpleNewFromData_NP(1, &vsize, type, &v[0])
@@ -211,16 +222,29 @@ bar_impl :: proc(
 	kwargs: PyObject = PyDict_New()
 	assert(kwargs != nil)
 
-	PyDict_SetItemString(kwargs, "ec", PyString_FromString(strings.unsafe_string_to_cstring(ec)))
-	PyDict_SetItemString(kwargs, "ls", PyString_FromString(strings.unsafe_string_to_cstring(ls)))
+	cec := strings.clone_to_cstring(ec)
+	cls := strings.clone_to_cstring(ls)
+	defer {
+		delete(cec)
+		delete(cls)
+	}
+	PyDict_SetItemString(kwargs, "ec", PyString_FromString(cec))
+	PyDict_SetItemString(kwargs, "ls", PyString_FromString(cls))
 	PyDict_SetItemString(kwargs, "lw", PyFloat_FromDouble(lw))
 
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
 	for k, v in keywords {
-		PyDict_SetItemString(
-			kwargs,
-			strings.unsafe_string_to_cstring(k),
-			PyUnicode_FromString(strings.unsafe_string_to_cstring(v)),
-		)
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
 	}
 
 	plot_args: PyObject = PyTuple_New(2)
@@ -237,7 +261,6 @@ bar_impl :: proc(
 	Py_DECREF_PY(plot_args)
 	Py_DECREF_PY(kwargs)
 
-	ok = true
 	return
 }
 
@@ -261,14 +284,15 @@ bar5 :: proc(
 
 bar6 :: proc(
 	x: []$T,
-	y: []T,
+	y: []$U,
 	ec: string = "black",
 	ls: string = "-",
 	lw: f64 = 1.0,
 	keywords: map[string]string = {},
 ) -> (
 	ok: bool,
-) where intrinsics.type_is_numeric(T) {
+) where intrinsics.type_is_numeric(T) &&
+	intrinsics.type_is_numeric(U) {
 	interpreter_get()
 	xarray: PyObject = get_array(x)
 	yarray: PyObject = get_array(y)
@@ -283,6 +307,438 @@ bar6 :: proc(
 bar :: proc {
 	bar5,
 	bar6,
+}
+
+
+clf :: proc() -> (ok: bool) {
+	interpreter_get()
+	res: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_clf,
+		interpreter_get().s_python_empty_tuple,
+	)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to clf() failed.")
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
+
+plot_xy_style :: proc(
+	x: []$T,
+	y: []$U,
+	style: string = "",
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) &&
+	intrinsics.type_is_numeric(U) {
+
+
+	assert(len(x) == len(y))
+	interpreter_get()
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+
+	cs := strings.clone_to_cstring(style)
+	defer delete(cs)
+	pystring: PyObject = PyString_FromString(cs)
+
+	plot_args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(plot_args, 0, xarray)
+	PyTuple_SetItem(plot_args, 1, yarray)
+	PyTuple_SetItem(plot_args, 2, pystring)
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_plot, plot_args)
+
+	Py_DECREF_PY(plot_args)
+	ok = res != nil
+	if ok do Py_DECREF_PY(res)
+
+	return
+}
+
+
+plot_xy_kwargs :: proc(
+	x: []$T,
+	y: []$U,
+	keywords: map[string]string,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) &&
+	intrinsics.type_is_numeric(U) {
+	assert(len(x) == len(y))
+	interpreter_get()
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+
+	// construct positional args
+	args: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+	// construct keyword args
+	kwargs: PyObject = PyDict_New()
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, args, kwargs)
+
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+
+	ok = res != nil
+	if ok do Py_DECREF_PY(res)
+
+	return
+}
+
+
+plot_x_style :: proc(
+	x: []$T,
+	style: string = "",
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(x)
+
+	cs := strings.clone_to_cstring(style)
+	defer delete(cs)
+	pystring: PyObject = PyString_FromString(cs)
+
+	plot_args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(plot_args, 0, xarray)
+	PyTuple_SetItem(plot_args, 1, yarray)
+	PyTuple_SetItem(plot_args, 2, pystring)
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_plot, plot_args)
+
+	Py_DECREF_PY(plot_args)
+	ok = res != nil
+	if ok do Py_DECREF_PY(res)
+
+	return
+}
+
+
+plot_x_kwargs :: proc(
+	x: []$T,
+	keywords: map[string]string,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(x)
+
+	// construct positional args
+	args: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+	// construct keyword args
+	kwargs: PyObject = PyDict_New()
+
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, args, kwargs)
+
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+
+	ok = res != nil
+	if ok do Py_DECREF_PY(res)
+
+	return
+}
+
+plot :: proc {
+	plot_xy_style,
+	plot_xy_kwargs,
+	plot_x_style,
+	plot_x_kwargs,
+}
+
+
+named_plot_label_x_fmt :: proc(
+	label: string,
+	x: []$T,
+	format: string = "",
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) {
+
+	interpreter_get()
+	kwargs: PyObject = PyDict_New()
+	cname := strings.clone_to_cstring(label)
+	defer delete(cname)
+	PyDict_SetItemString(kwargs, "label", PyString_FromString(cname))
+
+	xarray: PyObject = get_array(x)
+
+	cformat := strings.clone_to_cstring(format)
+	defer delete(cformat)
+	pystring: PyObject = PyString_FromString(cformat)
+
+	plot_args: PyObject = PyTuple_New(2)
+
+	PyTuple_SetItem(plot_args, 0, xarray)
+	PyTuple_SetItem(plot_args, 1, pystring)
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, plot_args, kwargs)
+
+	Py_DECREF_PY(kwargs)
+	Py_DECREF_PY(plot_args)
+	ok = res != nil
+	if ok do Py_DECREF_PY(res)
+
+	return
+}
+
+
+named_plot_label_xy_fmt :: proc(
+	label: string,
+	x: []$T,
+	y: []$U,
+	format: string = "",
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) &&
+	intrinsics.type_is_numeric(U) {
+
+	interpreter_get()
+	kwargs: PyObject = PyDict_New()
+
+	cname := strings.clone_to_cstring(label)
+	defer delete(cname)
+	PyDict_SetItemString(kwargs, "label", PyString_FromString(cname))
+
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+
+	cformat := strings.clone_to_cstring(format)
+	defer delete(cformat)
+	pystring: PyObject = PyString_FromString(cformat)
+
+	plot_args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(plot_args, 0, xarray)
+	PyTuple_SetItem(plot_args, 1, yarray)
+	PyTuple_SetItem(plot_args, 2, pystring)
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, plot_args, kwargs)
+
+	Py_DECREF_PY(kwargs)
+	Py_DECREF_PY(plot_args)
+	ok = res != nil
+	if ok do Py_DECREF_PY(res)
+
+	return
+}
+
+named_plot :: proc {
+	named_plot_label_x_fmt,
+	named_plot_label_xy_fmt,
+}
+
+
+xlim_lr :: proc(left: $T, right: T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+
+	list: PyObject = PyList_New(2)
+	PyList_SetItem(list, 0, PyFloat_FromDouble(f64(left)))
+	PyList_SetItem(list, 1, PyFloat_FromDouble(f64(right)))
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, list)
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_xlim, args)
+
+	Py_DECREF_PY(args)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to xlim() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+
+	return
+}
+
+
+xlim_void :: proc() -> (left, right: f64, ok: bool) {
+	interpreter_get()
+	args: PyObject = PyTuple_New(0)
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_xlim, args)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to xlim() failed.")
+		return
+	}
+
+	left_py: PyObject = PyTuple_GetItem(res, 0)
+	right_py: PyObject = PyTuple_GetItem(res, 1)
+	left = PyFloat_AsDouble(left_py)
+	right = PyFloat_AsDouble(right_py)
+
+	Py_DECREF_PY(res)
+	return
+}
+
+xlim :: proc {
+	xlim_lr,
+	xlim_void,
+}
+
+
+title :: proc(titlestr: string, keywords: map[string]string = {}) -> (ok: bool) {
+	interpreter_get()
+
+	ctitlestr := strings.clone_to_cstring(titlestr)
+	defer delete(ctitlestr)
+
+	pytitlestr: PyObject = PyString_FromString(ctitlestr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pytitlestr)
+
+	kwargs: PyObject = PyDict_New()
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_title, args, kwargs)
+
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to title() failed.")
+		return
+	}
+	Py_DECREF_PY(res)
+	return
+}
+
+
+legend_void :: proc() -> (ok: bool) {
+	interpreter_get()
+
+	res: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_legend,
+		interpreter_get().s_python_empty_tuple,
+	)
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to legend() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
+
+legend_kwargs :: proc(keywords: map[string]string) -> (ok: bool) {
+	interpreter_get()
+
+	// construct keyword args
+	kwargs: PyObject = PyDict_New()
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(
+		interpreter_get().s_python_function_legend,
+		interpreter_get().s_python_empty_tuple,
+		kwargs,
+	)
+
+	Py_DECREF_PY(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to legend() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
+legend :: proc {
+	legend_void,
+	legend_kwargs,
+}
+
+
+pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, PyFloat_FromDouble(interval))
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_pause, args)
+	Py_DECREF_PY(args)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to pause() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+	return
 }
 
 
