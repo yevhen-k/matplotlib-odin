@@ -158,6 +158,8 @@ foreign py {
 	PyTuple_GetItem :: proc(p: PyObject, pos: Py_ssize_t) -> PyObject ---
 	PyFloat_AsDouble :: proc(pyfloat: PyObject) -> f64 ---
 	PyList_New :: proc(len: Py_ssize_t) -> PyObject ---
+	PyLong_FromSize_t :: proc(v: uint) -> PyObject ---
+	PyLong_FromLong :: proc(v: c.long) -> PyObject ---
 }
 
 PyString_FromString :: PyUnicode_FromString
@@ -619,6 +621,58 @@ xlim :: proc {
 }
 
 
+ylim_bt :: proc(bottom: $T, top: T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+
+	list: PyObject = PyList_New(2)
+	PyList_SetItem(list, 0, PyFloat_FromDouble(f64(bottom)))
+	PyList_SetItem(list, 1, PyFloat_FromDouble(f64(top)))
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, list)
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_ylim, args)
+
+	Py_DECREF_PY(args)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to ylim() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+
+	return
+}
+
+
+ylim_void :: proc() -> (bottom, top: f64, ok: bool) {
+	interpreter_get()
+	args: PyObject = PyTuple_New(0)
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_ylim, args)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to ylim() failed.")
+		return
+	}
+
+	bottom_py: PyObject = PyTuple_GetItem(res, 0)
+	top_py: PyObject = PyTuple_GetItem(res, 1)
+	bottom = PyFloat_AsDouble(bottom_py)
+	top = PyFloat_AsDouble(top_py)
+
+	Py_DECREF_PY(res)
+	return
+}
+
+ylim :: proc {
+	ylim_bt,
+	ylim_void,
+}
+
+
 title :: proc(titlestr: string, keywords: map[string]string = {}) -> (ok: bool) {
 	interpreter_get()
 
@@ -721,6 +775,43 @@ legend :: proc {
 	legend_kwargs,
 }
 
+figure_size :: proc(
+	w: $T,
+	h: $U,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(T) &&
+	intrinsics.type_is_numeric(U) {
+	interpreter_get()
+
+	dpi: f64 = 100.0
+	size: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(size, 0, PyFloat_FromDouble(f64(w) / dpi))
+	PyTuple_SetItem(size, 1, PyFloat_FromDouble(f64(h) / dpi))
+
+	kwargs: PyObject = PyDict_New()
+	PyDict_SetItemString(kwargs, "figsize", size)
+	PyDict_SetItemString(kwargs, "dpi", PyLong_FromSize_t(uint(dpi)))
+
+	res: PyObject = PyObject_Call(
+		interpreter_get().s_python_function_figure,
+		interpreter_get().s_python_empty_tuple,
+		kwargs,
+	)
+
+	Py_DECREF_PY(kwargs)
+	Py_DECREF_PY(size)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to figure_size() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
 
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
@@ -767,6 +858,37 @@ show :: proc(block: bool = true) -> (ok: bool) {
 	if (res == nil) {
 		fmt.eprintln("Call to show() failed.")
 		ok = false
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
+save :: proc(filename: string, dpi: i64 = 0) -> (ok: bool) {
+	interpreter_get()
+
+	cfilename := strings.clone_to_cstring(filename)
+	defer delete(cfilename)
+	pyfilename: PyObject = PyString_FromString(cfilename)
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pyfilename)
+
+	kwargs: PyObject = PyDict_New()
+
+	if (dpi > 0) {
+		PyDict_SetItemString(kwargs, "dpi", PyLong_FromLong(c.long(dpi)))
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_save, args, kwargs)
+
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to save() failed.")
+		return
 	}
 
 	Py_DECREF_PY(res)
