@@ -11,7 +11,7 @@ when ODIN_OS == .Linux {
 	foreign import py "system:libpython3.10.so"
 }
 
-@(private = "package")
+// @(private = "package")
 PyObject :: distinct rawptr
 @(private = "package")
 Py_ssize_t :: uint
@@ -813,6 +813,133 @@ figure_size :: proc(
 }
 
 
+imshow_impl :: proc(
+	ptr: rawptr,
+	type: NPY_TYPES,
+	rows: uint,
+	columns: uint,
+	colors: uint,
+	keywords: map[string]string = {},
+	out: ^PyObject,
+) {
+	// TODO: implement more types
+	assert(type == NPY_TYPES.NPY_UBYTE || type == NPY_TYPES.NPY_FLOAT)
+	assert(colors == 1 || colors == 3 || colors == 4)
+	assert(ptr != nil)
+
+	interpreter_get()
+
+	// construct args
+	dims: [3]npy_intp = {npy_intp(rows), npy_intp(columns), npy_intp(colors)}
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(
+		args,
+		0,
+		PyArray_SimpleNewFromData_NP(colors == 1 ? 2 : 3, &dims[0], type, ptr),
+	)
+
+	// construct keyword args
+	kwargs: PyObject = PyDict_New()
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_imshow, args, kwargs)
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+
+	if (res == nil) {
+		fmt.eprintln("Call to imshow() failed")
+	}
+	out^ = res
+}
+
+imshow_rawptr :: proc(
+	ptr: rawptr,
+	rows: uint,
+	columns: uint,
+	colors: uint,
+	keywords: map[string]string = {},
+	out: ^PyObject = nil,
+) {
+	assert(ptr != nil)
+	imshow_impl(ptr, NPY_TYPES.NPY_UBYTE, rows, columns, colors, keywords, out)
+}
+
+imshow_floatptr :: proc(
+	ptr: []f32,
+	rows: uint,
+	columns: uint,
+	colors: uint,
+	keywords: map[string]string = {},
+	out: ^PyObject = nil,
+) {
+	assert(len(ptr) > 0)
+	imshow_impl(&ptr[0], NPY_TYPES.NPY_FLOAT, rows, columns, colors, keywords, out)
+}
+
+imshow :: proc {
+	imshow_floatptr,
+	imshow_rawptr,
+	imshow_impl,
+}
+
+
+colorbar :: proc(mappable: PyObject, keywords: map[string]f32 = {}) -> (ok: bool) {
+	ok = mappable != nil
+	if !ok {
+		fmt.eprintln(
+			"Must call colorbar with PyObject* returned from an image, contour, surface, etc.",
+		)
+	}
+
+
+	interpreter_get()
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, mappable)
+
+	kwargs: PyObject = PyDict_New()
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		append(&kv, ck)
+		PyDict_SetItemString(kwargs, ck, PyFloat_FromDouble(f64(v)))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_colorbar, args, kwargs)
+
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to colorbar() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
+
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 
@@ -888,6 +1015,25 @@ save :: proc(filename: string, dpi: i64 = 0) -> (ok: bool) {
 	ok = res != nil
 	if !ok {
 		fmt.eprintln("Call to save() failed.")
+		return
+	}
+
+	Py_DECREF_PY(res)
+	return
+}
+
+
+close :: proc() -> (ok: bool) {
+	interpreter_get()
+
+	res: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_close,
+		interpreter_get().s_python_empty_tuple,
+	)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to close() failed.")
 		return
 	}
 
