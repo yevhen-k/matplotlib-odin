@@ -1,4 +1,5 @@
-.PHONY: all build_dirs python310 object shared build clear examples bar animation basic
+.PHONY: all build_dirs python310 object shared build clear examples bar animation basic \
+	colorbar
 
 CUR_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 LIB_OUT := build/lib
@@ -40,7 +41,7 @@ clear:
 
 all: build_dirs build
 
-examples: all bar animation basic
+examples: all bar animation basic colorbar
 
 bar:
 	odin build examples/bar.odin -file -out=$(BIN_OUT)/bar
@@ -50,3 +51,6 @@ animation:
 
 basic:
 	odin build examples/basic.odin -file -out=$(BIN_OUT)/basic
+
+colorbar:
+	odin build examples/colorbar.odin -file -out=$(BIN_OUT)/colorbar
