@@ -11,7 +11,7 @@ main :: proc() {
 	defer plt.interpreter_delete(interp)
 
 	x := []int{1, 2, 3, 4, 5}
-	y := []int{1, 2, 3, 4, 5}
+	y := []f32{1, 2, 3, 4, 5}
 	ok := plt.bar(x, y)
 	if !ok {
 		fmt.eprintln("Plotting failed")
