@@ -1,5 +1,5 @@
 .PHONY: all build_dirs python310 object shared build clear examples bar animation basic \
-	colorbar
+	colorbar contour
 
 CUR_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 LIB_OUT := build/lib
@@ -54,3 +54,6 @@ basic:
 
 colorbar:
 	odin build examples/colorbar.odin -file -out=$(BIN_OUT)/colorbar
+
+contour:
+	odin build examples/contour.odin -file -out=$(BIN_OUT)/contour

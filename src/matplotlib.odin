@@ -15,6 +15,8 @@ when ODIN_OS == .Linux {
 PyObject :: distinct rawptr
 @(private = "package")
 Py_ssize_t :: uint
+@(private = "package")
+PyArrayObject :: distinct rawptr
 
 @(private = "package")
 Interpreter :: struct {
@@ -140,6 +142,8 @@ foreign plt {
 
 	PyArray_SimpleNewFromData_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES, data: rawptr) -> PyObject ---
 	Py_DECREF_PY :: proc(o: PyObject) ---
+	PyArray_SimpleNew_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES) -> PyObject ---
+	PyArray_DATA_NP :: proc(arr: PyArrayObject) -> rawptr ---
 }
 
 @(default_calling_convention = "c")
@@ -160,6 +164,7 @@ foreign py {
 	PyList_New :: proc(len: Py_ssize_t) -> PyObject ---
 	PyLong_FromSize_t :: proc(v: uint) -> PyObject ---
 	PyLong_FromLong :: proc(v: c.long) -> PyObject ---
+	PyObject_GetAttrString :: proc(o: PyObject, attr_name: cstring) -> PyObject ---
 }
 
 PyString_FromString :: PyUnicode_FromString
@@ -264,6 +269,84 @@ bar_impl :: proc(
 	Py_DECREF_PY(kwargs)
 
 	return
+}
+
+get_2darray_slice :: proc(v: $T/[][]$E) -> PyObject where intrinsics.type_is_numeric(E) {
+	assert(len(v) > 0, "get_2d_array v too small")
+
+	rows := npy_intp(len(v))
+	cols := npy_intp(len(v[0]))
+	vsize: [2]npy_intp = {rows, cols}
+
+	varray: PyArrayObject = PyArrayObject(PyArray_SimpleNew_NP(2, &vsize[0], NPY_TYPES.NPY_DOUBLE))
+
+	vd_begin: [^]f64 = cast([^]f64)(PyArray_DATA_NP(varray))
+	assert(vd_begin != nil)
+
+	for row, i in v {
+		assert(len(row) == int(vsize[1]), "2d matrix is not rectangular")
+		for col, j in row {
+			// vd_begin[row][col]
+			vd_begin[i * int(cols) + j] = f64(v[i][j])
+		}
+	}
+
+	res := PyObject(varray)
+	return res
+}
+
+get_2darray_dyn :: proc(
+	v: $T/[dynamic][dynamic]$E,
+) -> PyObject where intrinsics.type_is_numeric(E) {
+	assert(len(v) > 0, "get_2d_array v too small")
+
+	rows := npy_intp(len(v))
+	cols := npy_intp(len(v[0]))
+	vsize: [2]npy_intp = {rows, cols}
+
+	varray: PyArrayObject = PyArrayObject(PyArray_SimpleNew_NP(2, &vsize[0], NPY_TYPES.NPY_DOUBLE))
+
+	vd_begin: [^]f64 = cast([^]f64)(PyArray_DATA_NP(varray))
+	assert(vd_begin != nil)
+
+	for row, i in v {
+		assert(len(row) == int(vsize[1]), "2d matrix is not rectangular")
+		for col, j in row {
+			// vd_begin[row][col]
+			vd_begin[i * int(cols) + j] = f64(v[i][j])
+		}
+	}
+
+	res := PyObject(varray)
+	return res
+}
+
+get_2darray_raw :: proc(
+	v: $T/[]$E,
+	rows: uint,
+	cols: uint,
+) -> PyObject where intrinsics.type_is_numeric(E) {
+	assert(len(v) > 0, "get_2d_array v too small")
+
+	vsize: [2]npy_intp = {npy_intp(rows), npy_intp(cols)}
+
+	varray: PyArrayObject = PyArrayObject(PyArray_SimpleNew_NP(2, &vsize[0], NPY_TYPES.NPY_DOUBLE))
+
+	vd_begin: [^]f64 = cast([^]f64)(PyArray_DATA_NP(varray))
+	assert(vd_begin != nil)
+
+	for row, i in v {
+		vd_begin[i] = f64(row)
+	}
+
+	res := PyObject(varray)
+	return res
+}
+
+get_2darray :: proc {
+	get_2darray_slice,
+	get_2darray_dyn,
+	get_2darray_raw,
 }
 
 bar5 :: proc(
@@ -939,6 +1022,123 @@ colorbar :: proc(mappable: PyObject, keywords: map[string]f32 = {}) -> (ok: bool
 	return
 }
 
+
+contour_slice :: proc(
+	x: $T/[][]$E,
+	y: T,
+	z: T,
+	keywords: map[string]string = {},
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x)
+	yarray: PyObject = get_2darray(y)
+	zarray: PyObject = get_2darray(z)
+
+	ok = contour_impl(xarray, yarray, zarray, keywords)
+	return
+}
+
+contour_dyn :: proc(
+	x: $T/[dynamic][dynamic]$E,
+	y: T,
+	z: T,
+	keywords: map[string]string = {},
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x)
+	yarray: PyObject = get_2darray(y)
+	zarray: PyObject = get_2darray(z)
+
+	ok = contour_impl(xarray, yarray, zarray, keywords)
+	return
+}
+
+contour_raw :: proc(
+	x: $T/[]$E,
+	y: T,
+	z: T,
+	rows: uint,
+	cols: uint,
+	keywords: map[string]string = {},
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x, rows, cols)
+	yarray: PyObject = get_2darray(y, rows, cols)
+	zarray: PyObject = get_2darray(z, rows, cols)
+
+	ok = contour_impl(xarray, yarray, zarray, keywords)
+	return
+}
+
+@(private = "package")
+contour_impl :: proc(
+	xarray: PyObject,
+	yarray: PyObject,
+	zarray: PyObject,
+	keywords: map[string]string = {},
+) -> (
+	ok: bool,
+) {
+	// construct positional args
+	args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+	PyTuple_SetItem(args, 2, zarray)
+
+	// Build up the kw args.
+	kwargs: PyObject = PyDict_New()
+
+	python_colormap_coolwarm: PyObject = PyObject_GetAttrString(
+		interpreter_get().s_python_colormap,
+		"coolwarm",
+	)
+
+	PyDict_SetItemString(kwargs, "cmap", python_colormap_coolwarm)
+
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyString_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_contour, args, kwargs)
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("failed contour")
+		return
+	}
+	Py_DECREF_PY(res)
+	return
+}
+
+contour :: proc {
+	contour_slice,
+	contour_dyn,
+	contour_raw,
+}
 
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
