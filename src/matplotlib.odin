@@ -1140,6 +1140,62 @@ contour :: proc {
 	contour_raw,
 }
 
+
+fill_between :: proc(
+	x: $T/[]$E,
+	y1: T,
+	y2: T,
+	keywords: map[string]string,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	assert(len(x) == len(y1))
+	assert(len(x) == len(y2))
+
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_array(x)
+	y1array: PyObject = get_array(y1)
+	y2array: PyObject = get_array(y2)
+
+	// construct positional args
+	args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, y1array)
+	PyTuple_SetItem(args, 2, y2array)
+
+	// construct keyword args
+	kwargs: PyObject = PyDict_New()
+	kv := make([dynamic]cstring, 0, len(keywords) * 2)
+	for k, v in keywords {
+		ck := strings.clone_to_cstring(k)
+		cv := strings.clone_to_cstring(v)
+		append(&kv, ck)
+		append(&kv, cv)
+		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
+	}
+	defer {
+		for c in kv {
+			delete(c)
+		}
+		delete(kv)
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_fill_between, args, kwargs)
+
+	Py_DECREF_PY(args)
+	Py_DECREF_PY(kwargs)
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("failed fill_between")
+		return
+	}
+	Py_DECREF_PY(res)
+	return
+}
+
+
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 
