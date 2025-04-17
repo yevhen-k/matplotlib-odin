@@ -157,7 +157,7 @@ foreign py {
 	PyObject_Call :: proc(callable: PyObject, args: PyObject, kwargs: PyObject) -> PyObject ---
 	Py_DecRef :: proc(o: PyObject) ---
 	PyObject_CallObject :: proc(callable: PyObject, args: PyObject) -> PyObject ---
-	PyBool_FromLong :: proc(_: c.long) -> PyObject ---
+	PyBool_FromLong :: proc(b: c.long) -> PyObject ---
 	PyList_SetItem :: proc(list: PyObject, index: Py_ssize_t, item: PyObject) -> i32 ---
 	PyTuple_GetItem :: proc(p: PyObject, pos: Py_ssize_t) -> PyObject ---
 	PyFloat_AsDouble :: proc(pyfloat: PyObject) -> f64 ---
@@ -169,6 +169,47 @@ foreign py {
 
 PyString_FromString :: PyUnicode_FromString
 
+// Functionality of the Kwargs type can be extended accoridng to
+// https://docs.python.org/3/c-api/dict.html#dictionary-objects
+// if necessary
+Kwargs :: distinct PyObject
+kwags_init :: proc() -> Kwargs {
+	interpreter_get()
+	kwargs: PyObject = PyDict_New()
+	assert(kwargs != nil)
+	return Kwargs(kwargs)
+}
+
+kwags_delete :: proc(kwargs: ^Kwargs) {
+	Py_DECREF_PY(PyObject(kwargs^))
+}
+
+kwargs_append_cstr :: proc(kwargs: ^Kwargs, key: cstring, val: cstring) {
+	ret := PyDict_SetItemString(PyObject(kwargs^), key, PyString_FromString(val))
+	assert(ret == 0)
+}
+
+kwargs_append_float :: proc(kwargs: ^Kwargs, key: cstring, val: f64) {
+	ret := PyDict_SetItemString(PyObject(kwargs^), key, PyFloat_FromDouble(val))
+	assert(ret == 0)
+}
+
+kwargs_append_long :: proc(kwargs: ^Kwargs, key: cstring, val: c.long) {
+	ret := PyDict_SetItemString(PyObject(kwargs^), key, PyLong_FromLong(val))
+	assert(ret == 0)
+}
+
+kwargs_append_bool :: proc(kwargs: ^Kwargs, key: cstring, val: bool) {
+	ret := PyDict_SetItemString(PyObject(kwargs^), key, PyBool_FromLong(c.long(val)))
+	assert(ret == 0)
+}
+
+kwargs_append :: proc {
+	kwargs_append_cstr,
+	kwargs_append_float,
+	kwargs_append_long,
+	kwargs_append_bool,
+}
 
 @(private = "package")
 select_npy_type :: proc($T: typeid) -> NPY_TYPES {
@@ -222,12 +263,17 @@ bar_impl :: proc(
 	ec: string = "black",
 	ls: string = "-",
 	lw: f64 = 1.0,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
 ) {
-	kwargs: PyObject = PyDict_New()
-	assert(kwargs != nil)
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+		assert(kwargs != nil)
+	}
 
 	cec := strings.clone_to_cstring(ec)
 	cls := strings.clone_to_cstring(ls)
@@ -238,21 +284,6 @@ bar_impl :: proc(
 	PyDict_SetItemString(kwargs, "ec", PyString_FromString(cec))
 	PyDict_SetItemString(kwargs, "ls", PyString_FromString(cls))
 	PyDict_SetItemString(kwargs, "lw", PyFloat_FromDouble(lw))
-
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
-	}
 
 	plot_args: PyObject = PyTuple_New(2)
 	PyTuple_SetItem(plot_args, 0, xarray)
@@ -266,7 +297,7 @@ bar_impl :: proc(
 		Py_DECREF_PY(res)
 	}
 	Py_DECREF_PY(plot_args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	return
 }
@@ -354,7 +385,7 @@ bar5 :: proc(
 	ec: string = "black",
 	ls: string = "-",
 	lw: f64 = 1.0,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> bool where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 
@@ -373,7 +404,7 @@ bar6 :: proc(
 	ec: string = "black",
 	ls: string = "-",
 	lw: f64 = 1.0,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(T) &&
@@ -449,7 +480,7 @@ plot_xy_style :: proc(
 plot_xy_kwargs :: proc(
 	x: []$T,
 	y: []$U,
-	keywords: map[string]string,
+	keywords: Kwargs,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(T) &&
@@ -464,26 +495,17 @@ plot_xy_kwargs :: proc(
 	PyTuple_SetItem(args, 0, xarray)
 	PyTuple_SetItem(args, 1, yarray)
 	// construct keyword args
-	kwargs: PyObject = PyDict_New()
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
 	}
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, args, kwargs)
 
 	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	ok = res != nil
 	if ok do Py_DECREF_PY(res)
@@ -523,7 +545,7 @@ plot_x_style :: proc(
 
 plot_x_kwargs :: proc(
 	x: []$T,
-	keywords: map[string]string,
+	keywords: Kwargs,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(T) {
@@ -536,26 +558,17 @@ plot_x_kwargs :: proc(
 	PyTuple_SetItem(args, 0, xarray)
 	PyTuple_SetItem(args, 1, yarray)
 	// construct keyword args
-	kwargs: PyObject = PyDict_New()
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
 
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
-	}
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, args, kwargs)
 
 	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	ok = res != nil
 	if ok do Py_DECREF_PY(res)
@@ -756,7 +769,7 @@ ylim :: proc {
 }
 
 
-title :: proc(titlestr: string, keywords: map[string]string = {}) -> (ok: bool) {
+title :: proc(titlestr: string, keywords: Kwargs = nil) -> (ok: bool) {
 	interpreter_get()
 
 	ctitlestr := strings.clone_to_cstring(titlestr)
@@ -766,26 +779,17 @@ title :: proc(titlestr: string, keywords: map[string]string = {}) -> (ok: bool) 
 	args: PyObject = PyTuple_New(1)
 	PyTuple_SetItem(args, 0, pytitlestr)
 
-	kwargs: PyObject = PyDict_New()
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
 	}
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_title, args, kwargs)
 
 	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	ok = res != nil
 	if !ok {
@@ -815,24 +819,15 @@ legend_void :: proc() -> (ok: bool) {
 }
 
 
-legend_kwargs :: proc(keywords: map[string]string) -> (ok: bool) {
+legend_kwargs :: proc(keywords: Kwargs) -> (ok: bool) {
 	interpreter_get()
 
 	// construct keyword args
-	kwargs: PyObject = PyDict_New()
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
 	}
 
 	res: PyObject = PyObject_Call(
@@ -841,7 +836,7 @@ legend_kwargs :: proc(keywords: map[string]string) -> (ok: bool) {
 		kwargs,
 	)
 
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	ok = res != nil
 	if !ok {
@@ -902,7 +897,7 @@ imshow_impl :: proc(
 	rows: uint,
 	columns: uint,
 	colors: uint,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 	out: ^PyObject,
 ) {
 	// TODO: implement more types
@@ -922,25 +917,16 @@ imshow_impl :: proc(
 	)
 
 	// construct keyword args
-	kwargs: PyObject = PyDict_New()
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
 	}
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_imshow, args, kwargs)
 	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	if (res == nil) {
 		fmt.eprintln("Call to imshow() failed")
@@ -953,7 +939,7 @@ imshow_rawptr :: proc(
 	rows: uint,
 	columns: uint,
 	colors: uint,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 	out: ^PyObject = nil,
 ) {
 	assert(ptr != nil)
@@ -965,7 +951,7 @@ imshow_floatptr :: proc(
 	rows: uint,
 	columns: uint,
 	colors: uint,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 	out: ^PyObject = nil,
 ) {
 	assert(len(ptr) > 0)
@@ -979,7 +965,7 @@ imshow :: proc {
 }
 
 
-colorbar :: proc(mappable: PyObject, keywords: map[string]f32 = {}) -> (ok: bool) {
+colorbar :: proc(mappable: PyObject, keywords: Kwargs = nil) -> (ok: bool) {
 	ok = mappable != nil
 	if !ok {
 		fmt.eprintln(
@@ -993,24 +979,17 @@ colorbar :: proc(mappable: PyObject, keywords: map[string]f32 = {}) -> (ok: bool
 	args: PyObject = PyTuple_New(1)
 	PyTuple_SetItem(args, 0, mappable)
 
-	kwargs: PyObject = PyDict_New()
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		append(&kv, ck)
-		PyDict_SetItemString(kwargs, ck, PyFloat_FromDouble(f64(v)))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
 	}
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_colorbar, args, kwargs)
 
 	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 
 	ok = res != nil
 	if !ok {
@@ -1027,7 +1006,7 @@ contour_slice :: proc(
 	x: $T/[][]$E,
 	y: T,
 	z: T,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(E) {
@@ -1046,7 +1025,7 @@ contour_dyn :: proc(
 	x: $T/[dynamic][dynamic]$E,
 	y: T,
 	z: T,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(E) {
@@ -1067,7 +1046,7 @@ contour_raw :: proc(
 	z: T,
 	rows: uint,
 	cols: uint,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(E) {
@@ -1087,7 +1066,7 @@ contour_impl :: proc(
 	xarray: PyObject,
 	yarray: PyObject,
 	zarray: PyObject,
-	keywords: map[string]string = {},
+	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
 ) {
@@ -1098,7 +1077,12 @@ contour_impl :: proc(
 	PyTuple_SetItem(args, 2, zarray)
 
 	// Build up the kw args.
-	kwargs: PyObject = PyDict_New()
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
 
 	python_colormap_coolwarm: PyObject = PyObject_GetAttrString(
 		interpreter_get().s_python_colormap,
@@ -1107,24 +1091,9 @@ contour_impl :: proc(
 
 	PyDict_SetItemString(kwargs, "cmap", python_colormap_coolwarm)
 
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyString_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
-	}
-
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_contour, args, kwargs)
 	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DECREF_PY(kwargs)
 	ok = res != nil
 	if !ok {
 		fmt.eprintln("failed contour")
@@ -1145,7 +1114,7 @@ fill_between :: proc(
 	x: $T/[]$E,
 	y1: $T1/[]$E1,
 	y2: $T2/[]$E2,
-	keywords: map[string]string,
+	keywords: Kwargs,
 ) -> (
 	ok: bool,
 ) where intrinsics.type_is_numeric(E) &&
@@ -1168,21 +1137,7 @@ fill_between :: proc(
 	PyTuple_SetItem(args, 2, y2array)
 
 	// construct keyword args
-	kwargs: PyObject = PyDict_New()
-	kv := make([dynamic]cstring, 0, len(keywords) * 2)
-	for k, v in keywords {
-		ck := strings.clone_to_cstring(k)
-		cv := strings.clone_to_cstring(v)
-		append(&kv, ck)
-		append(&kv, cv)
-		PyDict_SetItemString(kwargs, ck, PyUnicode_FromString(cv))
-	}
-	defer {
-		for c in kv {
-			delete(c)
-		}
-		delete(kv)
-	}
+	kwargs: PyObject = PyObject(keywords)
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_fill_between, args, kwargs)
 

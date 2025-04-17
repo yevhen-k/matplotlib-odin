@@ -22,13 +22,11 @@ main :: proc() {
 		z[i] = math.log10(f64(i + 1))
 	}
 
-	// Prepare keywords to pass to PolyCollection. See
-	// https://matplotlib.org/api/_as_gen/matplotlib.axes.Axes.fill_between.html
-	keywords: map[string]string
-	defer delete(keywords)
-	// keywords["alpha"] = 0.4
-	keywords["hatch"] = "\\/..."
-	// keywords["color"] = "coral"
+	keywords := plt.kwags_init()
+	defer plt.kwags_delete(&keywords)
+	plt.kwargs_append(&keywords, cstring("alpha"), f64(0.4))
+	plt.kwargs_append(&keywords, cstring("hatch"), cstring("\\/..."))
+	plt.kwargs_append(&keywords, cstring("color"), cstring("coral"))
 
 	plt.fill_between(x[:], y[:], z[:], keywords)
 	plt.show()

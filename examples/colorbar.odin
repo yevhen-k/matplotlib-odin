@@ -28,8 +28,7 @@ main :: proc() {
 
 	plt.title("My matrix")
 	mat: plt.PyObject
-	kwargs: map[string]string
-	plt.imshow(z[:], uint(nrows), uint(ncols), uint(colors), kwargs, &mat)
+	plt.imshow(z[:], uint(nrows), uint(ncols), uint(colors), nil, &mat)
 	if &mat == nil {
 		fmt.panicf("Failed to call imshow_floatptr()")
 	}
