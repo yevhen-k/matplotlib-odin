@@ -1143,12 +1143,14 @@ contour :: proc {
 
 fill_between :: proc(
 	x: $T/[]$E,
-	y1: T,
-	y2: T,
+	y1: $T1/[]$E1,
+	y2: $T2/[]$E2,
 	keywords: map[string]string,
 ) -> (
 	ok: bool,
-) where intrinsics.type_is_numeric(E) {
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
 	assert(len(x) == len(y1))
 	assert(len(x) == len(y2))
 
