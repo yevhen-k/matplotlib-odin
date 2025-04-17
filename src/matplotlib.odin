@@ -141,7 +141,7 @@ foreign plt {
 	interpreter_delete :: proc(interpreter: ^Interpreter) ---
 
 	PyArray_SimpleNewFromData_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES, data: rawptr) -> PyObject ---
-	Py_DECREF_PY :: proc(o: PyObject) ---
+
 	PyArray_SimpleNew_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES) -> PyObject ---
 	PyArray_DATA_NP :: proc(arr: PyArrayObject) -> rawptr ---
 }
@@ -165,6 +165,7 @@ foreign py {
 	PyLong_FromSize_t :: proc(v: uint) -> PyObject ---
 	PyLong_FromLong :: proc(v: c.long) -> PyObject ---
 	PyObject_GetAttrString :: proc(o: PyObject, attr_name: cstring) -> PyObject ---
+	PyGILState_Check :: proc() -> c.int ---
 }
 
 PyString_FromString :: PyUnicode_FromString
@@ -181,7 +182,7 @@ kwags_init :: proc() -> Kwargs {
 }
 
 kwags_delete :: proc(kwargs: ^Kwargs) {
-	Py_DECREF_PY(PyObject(kwargs^))
+	Py_DecRef(PyObject(kwargs^))
 }
 
 kwargs_append_cstr :: proc(kwargs: ^Kwargs, key: cstring, val: cstring) {
@@ -294,10 +295,10 @@ bar_impl :: proc(
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_bar, plot_args, kwargs)
 	ok = res != nil
 	if ok {
-		Py_DECREF_PY(res)
+		Py_DecRef(res)
 	}
-	Py_DECREF_PY(plot_args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(plot_args)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	return
 }
@@ -438,7 +439,7 @@ clf :: proc() -> (ok: bool) {
 		fmt.eprintln("Call to clf() failed.")
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -469,9 +470,9 @@ plot_xy_style :: proc(
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_plot, plot_args)
 
-	Py_DECREF_PY(plot_args)
+	Py_DecRef(plot_args)
 	ok = res != nil
-	if ok do Py_DECREF_PY(res)
+	if ok do Py_DecRef(res)
 
 	return
 }
@@ -504,11 +505,11 @@ plot_xy_kwargs :: proc(
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, args, kwargs)
 
-	Py_DECREF_PY(args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	ok = res != nil
-	if ok do Py_DECREF_PY(res)
+	if ok do Py_DecRef(res)
 
 	return
 }
@@ -535,9 +536,9 @@ plot_x_style :: proc(
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_plot, plot_args)
 
-	Py_DECREF_PY(plot_args)
+	Py_DecRef(plot_args)
 	ok = res != nil
-	if ok do Py_DECREF_PY(res)
+	if ok do Py_DecRef(res)
 
 	return
 }
@@ -567,11 +568,11 @@ plot_x_kwargs :: proc(
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, args, kwargs)
 
-	Py_DECREF_PY(args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	ok = res != nil
-	if ok do Py_DECREF_PY(res)
+	if ok do Py_DecRef(res)
 
 	return
 }
@@ -611,10 +612,10 @@ named_plot_label_x_fmt :: proc(
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, plot_args, kwargs)
 
-	Py_DECREF_PY(kwargs)
-	Py_DECREF_PY(plot_args)
+	Py_DecRef(kwargs)
+	Py_DecRef(plot_args)
 	ok = res != nil
-	if ok do Py_DECREF_PY(res)
+	if ok do Py_DecRef(res)
 
 	return
 }
@@ -651,10 +652,10 @@ named_plot_label_xy_fmt :: proc(
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_plot, plot_args, kwargs)
 
-	Py_DECREF_PY(kwargs)
-	Py_DECREF_PY(plot_args)
+	Py_DecRef(kwargs)
+	Py_DecRef(plot_args)
 	ok = res != nil
-	if ok do Py_DECREF_PY(res)
+	if ok do Py_DecRef(res)
 
 	return
 }
@@ -677,7 +678,7 @@ xlim_lr :: proc(left: $T, right: T) -> (ok: bool) where intrinsics.type_is_numer
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_xlim, args)
 
-	Py_DECREF_PY(args)
+	Py_DecRef(args)
 
 	ok = res != nil
 	if !ok {
@@ -685,7 +686,7 @@ xlim_lr :: proc(left: $T, right: T) -> (ok: bool) where intrinsics.type_is_numer
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 
 	return
 }
@@ -707,7 +708,7 @@ xlim_void :: proc() -> (left, right: f64, ok: bool) {
 	left = PyFloat_AsDouble(left_py)
 	right = PyFloat_AsDouble(right_py)
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -729,7 +730,7 @@ ylim_bt :: proc(bottom: $T, top: T) -> (ok: bool) where intrinsics.type_is_numer
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_ylim, args)
 
-	Py_DECREF_PY(args)
+	Py_DecRef(args)
 
 	ok = res != nil
 	if !ok {
@@ -737,7 +738,7 @@ ylim_bt :: proc(bottom: $T, top: T) -> (ok: bool) where intrinsics.type_is_numer
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 
 	return
 }
@@ -759,7 +760,7 @@ ylim_void :: proc() -> (bottom, top: f64, ok: bool) {
 	bottom = PyFloat_AsDouble(bottom_py)
 	top = PyFloat_AsDouble(top_py)
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -788,15 +789,15 @@ title :: proc(titlestr: string, keywords: Kwargs = nil) -> (ok: bool) {
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_title, args, kwargs)
 
-	Py_DECREF_PY(args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	ok = res != nil
 	if !ok {
 		fmt.eprintln("Call to title() failed.")
 		return
 	}
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -814,7 +815,7 @@ legend_void :: proc() -> (ok: bool) {
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -836,7 +837,7 @@ legend_kwargs :: proc(keywords: Kwargs) -> (ok: bool) {
 		kwargs,
 	)
 
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	ok = res != nil
 	if !ok {
@@ -844,7 +845,7 @@ legend_kwargs :: proc(keywords: Kwargs) -> (ok: bool) {
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -877,8 +878,8 @@ figure_size :: proc(
 		kwargs,
 	)
 
-	Py_DECREF_PY(kwargs)
-	Py_DECREF_PY(size)
+	Py_DecRef(kwargs)
+	Py_DecRef(size)
 
 	ok = res != nil
 	if !ok {
@@ -886,7 +887,7 @@ figure_size :: proc(
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -925,8 +926,8 @@ imshow_impl :: proc(
 	}
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_imshow, args, kwargs)
-	Py_DECREF_PY(args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	if (res == nil) {
 		fmt.eprintln("Call to imshow() failed")
@@ -988,8 +989,8 @@ colorbar :: proc(mappable: PyObject, keywords: Kwargs = nil) -> (ok: bool) {
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_colorbar, args, kwargs)
 
-	Py_DECREF_PY(args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
 
 	ok = res != nil
 	if !ok {
@@ -997,7 +998,7 @@ colorbar :: proc(mappable: PyObject, keywords: Kwargs = nil) -> (ok: bool) {
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -1092,14 +1093,14 @@ contour_impl :: proc(
 	PyDict_SetItemString(kwargs, "cmap", python_colormap_coolwarm)
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_contour, args, kwargs)
-	Py_DECREF_PY(args)
-	if keywords == nil do Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
 	ok = res != nil
 	if !ok {
 		fmt.eprintln("failed contour")
 		return
 	}
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -1141,14 +1142,14 @@ fill_between :: proc(
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_fill_between, args, kwargs)
 
-	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
 	ok = res != nil
 	if !ok {
 		fmt.eprintln("failed fill_between")
 		return
 	}
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -1160,7 +1161,7 @@ pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	PyTuple_SetItem(args, 0, PyFloat_FromDouble(interval))
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_pause, args)
-	Py_DECREF_PY(args)
+	Py_DecRef(args)
 
 	ok = res != nil
 	if !ok {
@@ -1168,7 +1169,7 @@ pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -1190,8 +1191,8 @@ show :: proc(block: bool = true) -> (ok: bool) {
 			interpreter_get().s_python_empty_tuple,
 			kwargs,
 		)
-		Py_DECREF_PY(kwargs)
-		Py_DECREF_PY(py_false)
+		Py_DecRef(kwargs)
+		Py_DecRef(py_false)
 	}
 
 	ok = true
@@ -1200,7 +1201,7 @@ show :: proc(block: bool = true) -> (ok: bool) {
 		ok = false
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -1222,8 +1223,8 @@ save :: proc(filename: string, dpi: i64 = 0) -> (ok: bool) {
 
 	res: PyObject = PyObject_Call(interpreter_get().s_python_function_save, args, kwargs)
 
-	Py_DECREF_PY(args)
-	Py_DECREF_PY(kwargs)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
 
 	ok = res != nil
 	if !ok {
@@ -1231,7 +1232,7 @@ save :: proc(filename: string, dpi: i64 = 0) -> (ok: bool) {
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 
@@ -1250,7 +1251,7 @@ close :: proc() -> (ok: bool) {
 		return
 	}
 
-	Py_DECREF_PY(res)
+	Py_DecRef(res)
 	return
 }
 

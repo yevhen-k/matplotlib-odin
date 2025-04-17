@@ -358,8 +358,6 @@ PyObject* PyArray_SimpleNewFromData_NP(int nd, npy_intp* dims, int typenum, void
     return PyArray_SimpleNewFromData(nd, dims, typenum, data);
 }
 
-void Py_DECREF_PY(PyObject *o) { Py_DECREF(o); }
-
 PyObject * PyArray_SimpleNew_NP(int nd, npy_intp const *dims, int typenum) {
   return PyArray_SimpleNew(nd, dims, typenum);
 }

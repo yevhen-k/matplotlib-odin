@@ -32,7 +32,7 @@ main :: proc() {
 	if &mat == nil {
 		fmt.panicf("Failed to call imshow_floatptr()")
 	}
-	defer plt.Py_DECREF_PY(mat)
+	defer plt.Py_DecRef(mat)
 	plt.colorbar(mat)
 
 	// Show plots
