@@ -1,4 +1,4 @@
-examples: all bar animation basic colorbar fill_between fill
+examples: all bar animation basic colorbar fill_between fill imshow
 
 .PHONY: all build_dirs python310 object shared build clear examples $(examples)
 
@@ -62,3 +62,6 @@ fill_between:
 
 fill:
 	odin build examples/fill.odin -file -out=$(BIN_OUT)/fill
+
+imshow:
+	odin build examples/imshow.odin -file -out=$(BIN_OUT)/imshow

@@ -932,7 +932,7 @@ imshow_impl :: proc(
 	if (res == nil) {
 		fmt.eprintln("Call to imshow() failed")
 	}
-	out^ = res
+	if out != nil do out^ = res
 }
 
 imshow_rawptr :: proc(
