@@ -1154,6 +1154,50 @@ fill_between :: proc(
 }
 
 
+fill :: proc(
+	x: $T/[]$E,
+	y: $T1/[]$E1,
+	keywords: Kwargs,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) {
+	assert(len(x) == len(y))
+
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+
+	// construct positional args
+	args: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+
+	// construct keyword args
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_fill, args, kwargs)
+
+	Py_DecRef(args)
+	if keywords == nil do Py_DecRef(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("failed contour")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
+
+
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 

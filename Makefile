@@ -1,4 +1,4 @@
-examples: all bar animation basic colorbar fill_between
+examples: all bar animation basic colorbar fill_between fill
 
 .PHONY: all build_dirs python310 object shared build clear examples $(examples)
 
@@ -59,3 +59,6 @@ contour:
 
 fill_between:
 	odin build examples/fill_between.odin -file -out=$(BIN_OUT)/fill_between
+
+fill:
+	odin build examples/fill.odin -file -out=$(BIN_OUT)/fill
