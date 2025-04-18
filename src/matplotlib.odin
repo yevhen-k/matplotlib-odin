@@ -526,15 +526,22 @@ plot_x_style :: proc(
 ) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 	xarray: PyObject = get_array(x)
-	yarray: PyObject = get_array(x)
+
+	y: [dynamic]T
+	defer delete(y)
+	for i in 0 ..< len(x) {
+		append(&y, T(i))
+	}
+
+	yarray: PyObject = get_array(y[:])
 
 	cs := strings.clone_to_cstring(style)
 	defer delete(cs)
 	pystring: PyObject = PyString_FromString(cs)
 
 	plot_args: PyObject = PyTuple_New(3)
-	PyTuple_SetItem(plot_args, 0, xarray)
-	PyTuple_SetItem(plot_args, 1, yarray)
+	PyTuple_SetItem(plot_args, 0, yarray)
+	PyTuple_SetItem(plot_args, 1, xarray)
 	PyTuple_SetItem(plot_args, 2, pystring)
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_plot, plot_args)
@@ -555,12 +562,19 @@ plot_x_kwargs :: proc(
 ) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 	xarray: PyObject = get_array(x)
-	yarray: PyObject = get_array(x)
+
+	y: [dynamic]T
+	defer delete(y)
+	for i in 0 ..< len(x) {
+		append(&y, T(i))
+	}
+
+	yarray: PyObject = get_array(y[:])
 
 	// construct positional args
 	args: PyObject = PyTuple_New(2)
-	PyTuple_SetItem(args, 0, xarray)
-	PyTuple_SetItem(args, 1, yarray)
+	PyTuple_SetItem(args, 0, yarray)
+	PyTuple_SetItem(args, 1, xarray)
 	// construct keyword args
 	kwargs: PyObject
 	if keywords != nil {

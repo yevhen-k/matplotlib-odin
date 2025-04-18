@@ -1,4 +1,4 @@
-examples: all bar animation basic colorbar fill_between fill imshow lines3d
+examples: all bar animation basic colorbar fill_between fill imshow lines3d minimal
 
 .PHONY: all build_dirs python310 object shared build clear examples $(examples)
 
@@ -68,3 +68,6 @@ imshow:
 
 lines3d:
 	odin build examples/lines3d.odin -file -out=$(BIN_OUT)/lines3d
+
+minimal:
+	odin build examples/minimal.odin -file -out=$(BIN_OUT)/minimal
