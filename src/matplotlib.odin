@@ -83,7 +83,7 @@ Interpreter :: struct {
 npy_intp :: distinct uint // c.size_t
 
 @(private = "package")
-NPY_TYPES :: enum c.int {
+NPY_TYPES :: enum i32 {
 	NPY_BOOL = 0,
 	NPY_BYTE,
 	NPY_UBYTE,
@@ -140,9 +140,9 @@ foreign plt {
 	interpreter_get :: proc() -> ^Interpreter ---
 	interpreter_delete :: proc(interpreter: ^Interpreter) ---
 
-	PyArray_SimpleNewFromData_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES, data: rawptr) -> PyObject ---
+	PyArray_SimpleNewFromData_NP :: proc(nd: i32, dims: ^npy_intp, typenum: NPY_TYPES, data: rawptr) -> PyObject ---
 
-	PyArray_SimpleNew_NP :: proc(nd: c.int, dims: ^npy_intp, typenum: NPY_TYPES) -> PyObject ---
+	PyArray_SimpleNew_NP :: proc(nd: i32, dims: ^npy_intp, typenum: NPY_TYPES) -> PyObject ---
 	PyArray_DATA_NP :: proc(arr: PyArrayObject) -> rawptr ---
 }
 
@@ -165,7 +165,10 @@ foreign py {
 	PyLong_FromSize_t :: proc(v: uint) -> PyObject ---
 	PyLong_FromLong :: proc(v: c.long) -> PyObject ---
 	PyObject_GetAttrString :: proc(o: PyObject, attr_name: cstring) -> PyObject ---
-	PyGILState_Check :: proc() -> c.int ---
+	PyGILState_Check :: proc() -> i32 ---
+	PyImport_Import :: proc(name: PyObject) -> PyObject ---
+	PyObject_IsTrue :: proc(o: PyObject) -> i32 ---
+	Py_IncRef :: proc(o: PyObject) ---
 }
 
 PyString_FromString :: PyUnicode_FromString
@@ -585,6 +588,109 @@ plot :: proc {
 }
 
 
+plot3 :: proc(
+	x: $T/[]$E,
+	y: $T1/[]$E1,
+	z: $T2/[]$E2,
+	keywords: Kwargs = nil,
+	fig_number: c.long = 0,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
+	interpreter_get()
+
+	assert(len(x) == len(y))
+	assert(len(y) == len(z))
+
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+	zarray: PyObject = get_array(z)
+
+	// construct positional args
+	args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+	PyTuple_SetItem(args, 2, zarray)
+
+	// Build up the kw args.
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	fig_args: PyObject = PyTuple_New(1)
+	fig: PyObject
+	PyTuple_SetItem(fig_args, 0, PyLong_FromLong(fig_number))
+	fig_exists: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_fignum_exists,
+		fig_args,
+	)
+	if (PyObject_IsTrue(fig_exists) == 0) {
+		fig = PyObject_CallObject(
+			interpreter_get().s_python_function_figure,
+			interpreter_get().s_python_empty_tuple,
+		)
+	} else {
+		fig = PyObject_CallObject(interpreter_get().s_python_function_figure, fig_args)
+	}
+	ok = fig != nil
+	if (!ok) {
+		fmt.eprintln("Call to figure() failed.")
+		return
+	}
+
+	gca_kwargs: PyObject = PyDict_New()
+	PyDict_SetItemString(gca_kwargs, "projection", PyString_FromString("3d"))
+
+	add_subplot: PyObject = PyObject_GetAttrString(fig, "add_subplot")
+	ok = add_subplot != nil
+	if (!ok) {
+		fmt.eprintln("No add_subplot")
+		return
+	}
+	Py_IncRef(add_subplot)
+
+	axis: PyObject = PyObject_Call(add_subplot, interpreter_get().s_python_empty_tuple, gca_kwargs)
+
+	ok = axis != nil
+	if (!ok) {
+		fmt.eprintln("No axis")
+		return
+	}
+	Py_IncRef(axis)
+
+	Py_DecRef(add_subplot)
+	Py_DecRef(gca_kwargs)
+
+	plot3: PyObject = PyObject_GetAttrString(axis, "plot")
+	ok = plot3 != nil
+	if (!ok) {
+		fmt.eprintln("No 3D line plot")
+		return
+	}
+	Py_IncRef(plot3)
+	res: PyObject = PyObject_Call(plot3, args, kwargs)
+
+	Py_DecRef(plot3)
+	Py_DecRef(axis)
+	Py_DecRef(args)
+
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Failed 3D line plot")
+		return
+	}
+
+	if keywords == nil do Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
+
+
 named_plot_label_x_fmt :: proc(
 	label: string,
 	x: []$T,
@@ -854,6 +960,220 @@ legend :: proc {
 	legend_kwargs,
 }
 
+xlabel :: proc(str: string, keywords: Kwargs = nil) -> (ok: bool) {
+	interpreter_get()
+
+	cstr := strings.clone_to_cstring(str)
+	defer delete(cstr)
+	pystr: PyObject = PyString_FromString(cstr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pystr)
+
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_xlabel, args, kwargs)
+
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to xlabel() failed.")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
+
+ylabel :: proc(str: string, keywords: Kwargs = nil) -> (ok: bool) {
+	interpreter_get()
+
+	cstr := strings.clone_to_cstring(str)
+	defer delete(cstr)
+	pystr: PyObject = PyString_FromString(cstr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pystr)
+
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_ylabel, args, kwargs)
+
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to ylabel() failed.")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
+
+set_xlabel :: proc(str: string, keywords: Kwargs = nil) -> (ok: bool) {
+	interpreter_get()
+
+	cstr := strings.clone_to_cstring(str)
+	defer delete(cstr)
+	pystr: PyObject = PyString_FromString(cstr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pystr)
+
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	ax: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_gca,
+		interpreter_get().s_python_empty_tuple,
+	)
+	ok = ax != nil
+	if (!ok) {
+		fmt.eprintln("Call to gca() failed.")
+		return
+	}
+	Py_IncRef(ax)
+
+	xlabel: PyObject = PyObject_GetAttrString(ax, "set_xlabel")
+	ok = xlabel != nil
+	if (!ok) {
+		fmt.eprintln("Attribute set_xlabel not found.")
+		return
+	}
+
+	Py_IncRef(xlabel)
+
+	res: PyObject = PyObject_Call(xlabel, args, kwargs)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to set_xlabel() failed.")
+		return
+	}
+	Py_DecRef(xlabel)
+
+	Py_DecRef(ax)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
+
+set_ylabel :: proc(str: string, keywords: Kwargs = nil) -> (ok: bool) {
+	interpreter_get()
+
+	cstr := strings.clone_to_cstring(str)
+	defer delete(cstr)
+	pystr: PyObject = PyString_FromString(cstr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pystr)
+
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	ax: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_gca,
+		interpreter_get().s_python_empty_tuple,
+	)
+	ok = ax != nil
+	if (!ok) {
+		fmt.eprintln("Call to gca() failed.")
+		return
+	}
+	Py_IncRef(ax)
+
+	ylabel: PyObject = PyObject_GetAttrString(ax, "set_ylabel")
+	ok = ylabel != nil
+	if (!ok) {
+		fmt.eprintln("Attribute set_ylabel not found.")
+		return
+	}
+
+	Py_IncRef(ylabel)
+
+	res: PyObject = PyObject_Call(ylabel, args, kwargs)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to set_ylabel() failed.")
+		return
+	}
+	Py_DecRef(ylabel)
+
+	Py_DecRef(ax)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
+
+set_zlabel :: proc(str: string, keywords: Kwargs = nil) -> (ok: bool) {
+	interpreter_get()
+
+	cstr := strings.clone_to_cstring(str)
+	defer delete(cstr)
+	pystr: PyObject = PyString_FromString(cstr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pystr)
+
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	ax: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_gca,
+		interpreter_get().s_python_empty_tuple,
+	)
+	ok = ax != nil
+	if (!ok) {
+		fmt.eprintln("Call to gca() failed.")
+		return
+	}
+	Py_IncRef(ax)
+
+	zlabel: PyObject = PyObject_GetAttrString(ax, "set_zlabel")
+	ok = zlabel != nil
+	if (!ok) {
+		fmt.eprintln("Attribute set_zlabel not found.")
+		return
+	}
+
+	Py_IncRef(zlabel)
+
+	res: PyObject = PyObject_Call(zlabel, args, kwargs)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to set_zlabel() failed.")
+		return
+	}
+	Py_DecRef(zlabel)
+
+	Py_DecRef(ax)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
+
+
 figure_size :: proc(
 	w: $T,
 	h: $U,
@@ -1005,12 +1325,14 @@ colorbar :: proc(mappable: PyObject, keywords: Kwargs = nil) -> (ok: bool) {
 
 contour_slice :: proc(
 	x: $T/[][]$E,
-	y: T,
-	z: T,
+	y: $T1/[][]$E1,
+	z: $T2/[][]$E2,
 	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
-) where intrinsics.type_is_numeric(E) {
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
 	interpreter_get()
 
 	// using numpy arrays
@@ -1024,12 +1346,14 @@ contour_slice :: proc(
 
 contour_dyn :: proc(
 	x: $T/[dynamic][dynamic]$E,
-	y: T,
-	z: T,
+	y: $T1/[dynamic][dynamic]$E1,
+	z: $T2/[dynamic][dynamic]$E2,
 	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
-) where intrinsics.type_is_numeric(E) {
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
 	interpreter_get()
 
 	// using numpy arrays
@@ -1043,14 +1367,16 @@ contour_dyn :: proc(
 
 contour_raw :: proc(
 	x: $T/[]$E,
-	y: T,
-	z: T,
+	y: $T1/[]$E1,
+	z: $T2/[]$E2,
 	rows: uint,
 	cols: uint,
 	keywords: Kwargs = nil,
 ) -> (
 	ok: bool,
-) where intrinsics.type_is_numeric(E) {
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
 	interpreter_get()
 
 	// using numpy arrays
