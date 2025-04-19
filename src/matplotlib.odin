@@ -1469,6 +1469,81 @@ contour :: proc {
 	contour_raw,
 }
 
+
+spy_slice :: proc(
+	x: $T/[][]$E,
+	keywords: Kwargs = nil,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	interpreter_get()
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x)
+	ok = spy_impl(xarray, keywords)
+	return
+
+}
+
+spy_dyn :: proc(
+	x: $T/[dynamic][dynamic]$E,
+	keywords: Kwargs = nil,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	interpreter_get()
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x)
+	ok = spy_impl(xarray, keywords)
+	return
+}
+
+spy_raw :: proc(
+	x: $T/[]$E,
+	rows: uint,
+	cols: uint,
+	keywords: Kwargs = nil,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) {
+	interpreter_get()
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x, rows, cols)
+	ok = spy_impl(xarray, keywords)
+	return
+}
+
+@(private = "package")
+spy_impl :: proc(xarray: PyObject, keywords: Kwargs = nil) -> (ok: bool) {
+	// Build up the kwargs.
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	plot_args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(plot_args, 0, xarray)
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_spy, plot_args, kwargs)
+
+	Py_DecRef(plot_args)
+	Py_DecRef(kwargs)
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("failed spy")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
+
+spy :: proc {
+	spy_slice,
+	spy_dyn,
+	spy_raw,
+}
+
 quiver4 :: proc(
 	x: $T/[]$E,
 	y: $T1/[]$E1,

@@ -1,4 +1,4 @@
-examples: all bar animation basic colorbar fill_between fill imshow lines3d minimal quiver quiver3d
+examples: all bar animation basic colorbar fill_between fill imshow lines3d minimal quiver quiver3d spy
 
 .PHONY: all build_dirs python310 object shared build clear examples $(examples)
 
@@ -77,3 +77,6 @@ quiver:
 
 quiver3d:
 	odin build examples/quiver3d.odin -file -out=$(BIN_OUT)/quiver3d
+
+spy:
+	odin build examples/spy.odin -file -out=$(BIN_OUT)/spy
