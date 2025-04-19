@@ -6,6 +6,9 @@ import "core:math"
 
 // https://matplotlib.org/stable/gallery/mplot3d/lines3d.html
 main :: proc() {
+	interp := plt.interpreter_get()
+	defer plt.interpreter_delete(interp)
+
 	x: [dynamic]f64
 	defer delete(x)
 
