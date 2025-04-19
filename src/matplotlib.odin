@@ -518,7 +518,7 @@ plot_xy_kwargs :: proc(
 }
 
 
-plot_x_style :: proc(
+plot_y_style :: proc(
 	x: []$T,
 	style: string = "",
 ) -> (
@@ -554,7 +554,7 @@ plot_x_style :: proc(
 }
 
 
-plot_x_kwargs :: proc(
+plot_y_kwargs :: proc(
 	x: []$T,
 	keywords: Kwargs,
 ) -> (
@@ -597,8 +597,8 @@ plot_x_kwargs :: proc(
 plot :: proc {
 	plot_xy_style,
 	plot_xy_kwargs,
-	plot_x_style,
-	plot_x_kwargs,
+	plot_y_style,
+	plot_y_kwargs,
 }
 
 subplot :: proc(nrows: uint, ncols: uint, plot_number: uint) -> (ok: bool) {
