@@ -601,6 +601,25 @@ plot :: proc {
 	plot_x_kwargs,
 }
 
+subplot :: proc(nrows: uint, ncols: uint, plot_number: uint) -> (ok: bool) {
+	interpreter_get()
+
+	// construct positional args
+	args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(args, 0, PyLong_FromLong(c.long(nrows)))
+	PyTuple_SetItem(args, 1, PyLong_FromLong(c.long(ncols)))
+	PyTuple_SetItem(args, 2, PyLong_FromLong(c.long(plot_number)))
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_subplot, args)
+	Py_DecRef(args)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to subplot() failed.")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
 
 plot3 :: proc(
 	x: $T/[]$E,
@@ -1450,6 +1469,182 @@ contour :: proc {
 	contour_raw,
 }
 
+quiver4 :: proc(
+	x: $T/[]$E,
+	y: $T1/[]$E1,
+	u: $T2/[]$E2,
+	w: $T3/[]$E3,
+	keywords: Kwargs = nil,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) &&
+	intrinsics.type_is_numeric(E3) {
+	assert(len(x) == len(y) && len(x) == len(u) && len(u) == len(w))
+
+	interpreter_get()
+
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+	uarray: PyObject = get_array(u)
+	warray: PyObject = get_array(w)
+
+	plot_args: PyObject = PyTuple_New(4)
+	PyTuple_SetItem(plot_args, 0, xarray)
+	PyTuple_SetItem(plot_args, 1, yarray)
+	PyTuple_SetItem(plot_args, 2, uarray)
+	PyTuple_SetItem(plot_args, 3, warray)
+
+	// construct keyword args
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_quiver, plot_args, kwargs)
+
+	Py_DecRef(kwargs)
+	Py_DecRef(plot_args)
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("failed call quiver()")
+		return
+	}
+	Py_DecRef(res)
+
+	return
+}
+
+quiver6 :: proc(
+	x: $T/[]$E,
+	y: $T1/[]$E1,
+	z: $T2/[]$E2,
+	u: $T3/[]$E3,
+	w: $T4/[]$E4,
+	v: $T5/[]$E5,
+	keywords: Kwargs = nil,
+	fig_number: c.long = 0,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) &&
+	intrinsics.type_is_numeric(E3) &&
+	intrinsics.type_is_numeric(E4) &&
+	intrinsics.type_is_numeric(E5) {
+
+	//assert sizes match up
+	assert(
+		len(x) == len(y) &&
+		len(x) == len(u) &&
+		len(u) == len(w) &&
+		len(x) == len(z) &&
+		len(x) == len(v) &&
+		len(u) == len(v),
+	)
+
+	interpreter_get()
+
+	xarray: PyObject = get_array(x)
+	yarray: PyObject = get_array(y)
+	zarray: PyObject = get_array(z)
+	uarray: PyObject = get_array(u)
+	varray: PyObject = get_array(v)
+	warray: PyObject = get_array(w)
+
+	args: PyObject = PyTuple_New(6)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+	PyTuple_SetItem(args, 2, zarray)
+	PyTuple_SetItem(args, 3, uarray)
+	PyTuple_SetItem(args, 4, varray)
+	PyTuple_SetItem(args, 5, warray)
+
+	// construct keyword args
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+
+	fig_args: PyObject = PyTuple_New(1)
+	fig: PyObject
+	PyTuple_SetItem(fig_args, 0, PyLong_FromLong(fig_number))
+	fig_exists: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_fignum_exists,
+		fig_args,
+	)
+	if (PyObject_IsTrue(fig_exists) == 0) {
+		fig = PyObject_CallObject(
+			interpreter_get().s_python_function_figure,
+			interpreter_get().s_python_empty_tuple,
+		)
+	} else {
+		fig = PyObject_CallObject(interpreter_get().s_python_function_figure, fig_args)
+	}
+	ok = fig != nil
+	if (!ok) {
+		fmt.eprintln("Call to figure() failed.")
+		return
+	}
+
+	gca_kwargs: PyObject = PyDict_New()
+	PyDict_SetItemString(gca_kwargs, "projection", PyString_FromString("3d"))
+
+	add_subplot: PyObject = PyObject_GetAttrString(fig, "add_subplot")
+	ok = add_subplot != nil
+	if (!ok) {
+		fmt.eprintln("No add_subplot")
+		return
+	}
+	Py_IncRef(add_subplot)
+
+	axis: PyObject = PyObject_Call(add_subplot, interpreter_get().s_python_empty_tuple, gca_kwargs)
+
+	ok = axis != nil
+	if (!ok) {
+		fmt.eprintln("No axis")
+		return
+	}
+	Py_IncRef(axis)
+
+	Py_DecRef(add_subplot)
+	Py_DecRef(gca_kwargs)
+
+	plot3: PyObject = PyObject_GetAttrString(axis, "quiver")
+	ok = plot3 != nil
+	if (!ok) {
+		fmt.eprintln("No 3D quiver")
+		return
+	}
+	Py_IncRef(plot3)
+	res: PyObject = PyObject_Call(plot3, args, kwargs)
+
+	Py_DecRef(plot3)
+	Py_DecRef(axis)
+	Py_DecRef(args)
+
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("failed call quiver() in 3d")
+		return
+	}
+
+	if keywords == nil do Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+
+}
+
+quiver :: proc {
+	quiver4,
+	quiver6,
+}
 
 fill_between :: proc(
 	x: $T/[]$E,
@@ -1537,12 +1732,96 @@ fill :: proc(
 	return
 }
 
+set_aspect :: proc(ratio: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, PyFloat_FromDouble(ratio))
+	kwargs: PyObject = PyDict_New()
+
+	ax: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_gca,
+		interpreter_get().s_python_empty_tuple,
+	)
+
+	ok = ax != nil
+	if !ok {
+		fmt.eprintln("Call to gca() failed.")
+		return
+	}
+	Py_IncRef(ax)
+
+	set_aspect: PyObject = PyObject_GetAttrString(ax, "set_aspect")
+	ok = set_aspect != nil
+	if (!ok) {
+		fmt.eprintln("Attribute set_aspect not found.")
+		return
+	}
+	Py_IncRef(set_aspect)
+
+	res: PyObject = PyObject_Call(set_aspect, args, kwargs)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to set_aspect() failed.")
+		return
+	}
+	Py_DecRef(set_aspect)
+
+	Py_DecRef(ax)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
+
+set_aspect_equal :: proc() -> (ok: bool) {
+	// expect ratio == "equal". Leaving error handling to matplotlib.
+	interpreter_get()
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, PyString_FromString("equal"))
+	kwargs: PyObject = PyDict_New()
+
+	ax: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_gca,
+		interpreter_get().s_python_empty_tuple,
+	)
+
+	ok = ax != nil
+	if !ok {
+		fmt.eprintln("Call to gca() failed.")
+		return
+	}
+	Py_IncRef(ax)
+
+	set_aspect: PyObject = PyObject_GetAttrString(ax, "set_aspect")
+	ok = set_aspect != nil
+	if (!ok) {
+		fmt.eprintln("Attribute set_aspect not found.")
+		return
+	}
+	Py_IncRef(set_aspect)
+
+	res: PyObject = PyObject_Call(set_aspect, args, kwargs)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to set_aspect() failed.")
+		return
+	}
+	Py_DecRef(set_aspect)
+
+	Py_DecRef(ax)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
 
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 
 	args: PyObject = PyTuple_New(1)
-	PyTuple_SetItem(args, 0, PyFloat_FromDouble(interval))
+	PyTuple_SetItem(args, 0, PyFloat_FromDouble(f64(interval)))
 
 	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_pause, args)
 	Py_DecRef(args)
@@ -1557,6 +1836,27 @@ pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	return
 }
 
+grid :: proc(flag: bool) -> (ok: bool) {
+	interpreter_get()
+
+	pyflag: PyObject = PyBool_FromLong(c.long(flag))
+	Py_IncRef(pyflag)
+
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pyflag)
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_grid, args)
+	Py_DecRef(args)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to grid() failed.")
+		return
+	}
+	Py_DecRef(res)
+	Py_DecRef(pyflag)
+	return
+}
+
 
 show :: proc(block: bool = true) -> (ok: bool) {
 	interpreter_get()
@@ -1568,7 +1868,7 @@ show :: proc(block: bool = true) -> (ok: bool) {
 		)
 	} else {
 		kwargs: PyObject = PyDict_New()
-		py_false: PyObject = PyBool_FromLong(c.long(0))
+		py_false: PyObject = PyBool_FromLong(c.long(block))
 		PyDict_SetItemString(kwargs, "block", py_false)
 		res = PyObject_Call(
 			interpreter_get().s_python_function_show,
@@ -1585,6 +1885,63 @@ show :: proc(block: bool = true) -> (ok: bool) {
 		ok = false
 	}
 
+	Py_DecRef(res)
+	return
+}
+
+ion :: proc() -> (ok: bool) {
+	interpreter_get()
+
+	res: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_ion,
+		interpreter_get().s_python_empty_tuple,
+	)
+
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to ion() failed.")
+		return
+	}
+
+	Py_DecRef(res)
+	return
+}
+
+draw :: proc() -> (ok: bool) {
+	interpreter_get()
+
+	res: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_draw,
+		interpreter_get().s_python_empty_tuple,
+	)
+
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to draw() failed.")
+		return
+	}
+
+	Py_DecRef(res)
+	return
+}
+
+axis :: proc(axisstr: string) -> (ok: bool) {
+	interpreter_get()
+
+	axiscstr := strings.clone_to_cstring(axisstr)
+	defer delete(axiscstr)
+	str: PyObject = PyString_FromString(axiscstr)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, str)
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_axis, args)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("Call to title() failed.")
+		return
+	}
+
+	Py_DecRef(args)
 	Py_DecRef(res)
 	return
 }
