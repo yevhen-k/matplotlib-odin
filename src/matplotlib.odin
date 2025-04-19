@@ -2169,6 +2169,28 @@ set_aspect_equal :: proc() -> (ok: bool) {
 	return
 }
 
+xkcd :: proc() -> (ok: bool) {
+	interpreter_get()
+
+	kwargs: PyObject = PyDict_New()
+	res: PyObject = PyObject_Call(
+		interpreter_get().s_python_function_xkcd,
+		interpreter_get().s_python_empty_tuple,
+		kwargs,
+	)
+
+	Py_DecRef(kwargs)
+
+	ok = res != nil
+
+	if !ok {
+		fmt.eprintln("Call to show() failed.")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
+
 pause :: proc(interval: $T) -> (ok: bool) where intrinsics.type_is_numeric(T) {
 	interpreter_get()
 
