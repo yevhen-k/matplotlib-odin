@@ -940,6 +940,36 @@ title :: proc(titlestr: string, keywords: Kwargs = nil) -> (ok: bool) {
 	return
 }
 
+suptitle :: proc(suptitlestr: string, keywords: Kwargs = nil) -> (ok: bool) {
+	interpreter_get()
+
+	suptitle := strings.clone_to_cstring(suptitlestr)
+	defer delete(suptitle)
+	pysuptitlestr: PyObject = PyString_FromString(suptitle)
+	args: PyObject = PyTuple_New(1)
+	PyTuple_SetItem(args, 0, pysuptitlestr)
+
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+
+	res: PyObject = PyObject_Call(interpreter_get().s_python_function_suptitle, args, kwargs)
+	ok = res != nil
+
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+
+	if !ok {
+		fmt.eprintln("Call to suptitle() failed.")
+		return
+	}
+	Py_DecRef(res)
+	return
+}
+
 
 legend_void :: proc() -> (ok: bool) {
 	interpreter_get()
@@ -991,6 +1021,28 @@ legend_kwargs :: proc(keywords: Kwargs) -> (ok: bool) {
 legend :: proc {
 	legend_void,
 	legend_kwargs,
+}
+
+text :: proc(x: $T, y: T, text: string = "") -> (ok: bool) where intrinsics.type_is_numeric(T) {
+	interpreter_get()
+
+	ctext := strings.clone_to_cstring(text)
+	defer delete(ctext)
+	args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(args, 0, PyFloat_FromDouble(f64(x)))
+	PyTuple_SetItem(args, 1, PyFloat_FromDouble(f64(y)))
+	PyTuple_SetItem(args, 2, PyString_FromString(ctext))
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_text, args)
+	ok = res != nil
+	Py_DecRef(args)
+	if !ok {
+		fmt.eprintln("Call to text() failed.")
+		return
+	}
+
+	Py_DecRef(res)
+	return
 }
 
 xlabel :: proc(str: string, keywords: Kwargs = nil) -> (ok: bool) {
