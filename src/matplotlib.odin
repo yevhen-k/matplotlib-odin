@@ -712,6 +712,7 @@ plot3 :: proc(
 	} else {
 		fig = PyObject_CallObject(interpreter_get().s_python_function_figure, fig_args)
 	}
+	Py_DecRef(fig_exists)
 	ok = fig != nil
 	if (!ok) {
 		fmt.eprintln("Call to figure() failed.")
@@ -763,6 +764,187 @@ plot3 :: proc(
 	if keywords == nil do Py_DecRef(kwargs)
 	Py_DecRef(res)
 	return
+}
+
+
+plot_surface_slice :: proc(
+	x: $T/[][]$E,
+	y: $T1/[][]$E1,
+	z: $T2/[][]$E2,
+	keywords: Kwargs = nil,
+	fig_number: c.long = 0,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
+
+	interpreter_get()
+
+
+	assert(len(x) == len(y))
+	assert(len(y) == len(z))
+
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x)
+	yarray: PyObject = get_2darray(y)
+	zarray: PyObject = get_2darray(z)
+
+
+	return plot_surface_impl(xarray, yarray, zarray, keywords, fig_number)
+
+}
+
+plot_surface_dyn :: proc(
+	x: $T/[dynamic][dynamic]$E,
+	y: $T1/[dynamic][dynamic]$E1,
+	z: $T2/[dynamic][dynamic]$E2,
+	keywords: Kwargs = nil,
+	fig_number: c.long = 0,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x)
+	yarray: PyObject = get_2darray(y)
+	zarray: PyObject = get_2darray(z)
+
+	ok = plot_surface_impl(xarray, yarray, zarray, keywords, fig_number)
+	return
+}
+
+plot_surface_raw :: proc(
+	x: $T/[]$E,
+	y: $T1/[]$E1,
+	z: $T2/[]$E2,
+	rows: uint,
+	cols: uint,
+	keywords: Kwargs = nil,
+	fig_number: c.long = 0,
+) -> (
+	ok: bool,
+) where intrinsics.type_is_numeric(E) &&
+	intrinsics.type_is_numeric(E1) &&
+	intrinsics.type_is_numeric(E2) {
+	interpreter_get()
+
+	// using numpy arrays
+	xarray: PyObject = get_2darray(x, rows, cols)
+	yarray: PyObject = get_2darray(y, rows, cols)
+	zarray: PyObject = get_2darray(z, rows, cols)
+
+	ok = plot_surface_impl(xarray, yarray, zarray, keywords, fig_number)
+	return
+}
+
+@(private = "package")
+plot_surface_impl :: proc(
+	xarray: PyObject,
+	yarray: PyObject,
+	zarray: PyObject,
+	keywords: Kwargs = nil,
+	fig_number: c.long = 0,
+) -> (
+	ok: bool,
+) {
+	// construct positional args
+	args: PyObject = PyTuple_New(3)
+	PyTuple_SetItem(args, 0, xarray)
+	PyTuple_SetItem(args, 1, yarray)
+	PyTuple_SetItem(args, 2, zarray)
+	// construct keyword args
+	kwargs: PyObject
+	if keywords != nil {
+		kwargs = PyObject(keywords)
+	} else {
+		kwargs = PyDict_New()
+	}
+	PyDict_SetItemString(kwargs, "rstride", PyLong_FromLong(1))
+	PyDict_SetItemString(kwargs, "cstride", PyLong_FromLong(1))
+
+	python_colormap_coolwarm: PyObject = PyObject_GetAttrString(
+		interpreter_get().s_python_colormap,
+		"coolwarm",
+	)
+
+	PyDict_SetItemString(kwargs, "cmap", python_colormap_coolwarm)
+
+	fig_args: PyObject = PyTuple_New(1)
+	fig: PyObject
+	PyTuple_SetItem(fig_args, 0, PyLong_FromLong(fig_number))
+	fig_exists: PyObject = PyObject_CallObject(
+		interpreter_get().s_python_function_fignum_exists,
+		fig_args,
+	)
+	if (PyObject_IsTrue(fig_exists) == 0) {
+		fig = PyObject_CallObject(
+			interpreter_get().s_python_function_figure,
+			interpreter_get().s_python_empty_tuple,
+		)
+	} else {
+		fig = PyObject_CallObject(interpreter_get().s_python_function_figure, fig_args)
+	}
+	Py_DecRef(fig_exists)
+	ok = fig != nil
+	if (!ok) {
+		fmt.eprintln("Call to figure() failed.")
+		return
+	}
+
+	gca_kwargs: PyObject = PyDict_New()
+	PyDict_SetItemString(gca_kwargs, "projection", PyString_FromString("3d"))
+
+	add_subplot: PyObject = PyObject_GetAttrString(fig, "add_subplot")
+	ok = add_subplot != nil
+	if (!ok) {
+		fmt.eprintln("No add_subplot")
+		return
+	}
+	Py_IncRef(add_subplot)
+
+	axis: PyObject = PyObject_Call(add_subplot, interpreter_get().s_python_empty_tuple, gca_kwargs)
+
+	ok = axis != nil
+	if (!ok) {
+		fmt.eprintln("No axis")
+		return
+	}
+	Py_IncRef(axis)
+
+	Py_DecRef(add_subplot)
+	Py_DecRef(gca_kwargs)
+
+	plot_surface: PyObject = PyObject_GetAttrString(axis, "plot_surface")
+	ok = plot_surface != nil
+	if (!ok) {
+		fmt.eprintln("No surface")
+		return
+	}
+
+	Py_IncRef(plot_surface)
+	res: PyObject = PyObject_Call(plot_surface, args, kwargs)
+	ok = res != nil
+	if (!ok) {
+		fmt.eprintln("failed surface")
+		return
+	}
+	Py_DecRef(plot_surface)
+
+	Py_DecRef(axis)
+	Py_DecRef(args)
+	Py_DecRef(kwargs)
+	Py_DecRef(res)
+	return
+}
+
+plot_surface :: proc {
+	plot_surface_slice,
+	plot_surface_dyn,
+	plot_surface_raw,
 }
 
 
@@ -1756,6 +1938,7 @@ quiver6 :: proc(
 	} else {
 		fig = PyObject_CallObject(interpreter_get().s_python_function_figure, fig_args)
 	}
+	Py_DecRef(fig_exists)
 	ok = fig != nil
 	if (!ok) {
 		fmt.eprintln("Call to figure() failed.")
