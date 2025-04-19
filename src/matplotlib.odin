@@ -621,6 +621,48 @@ subplot :: proc(nrows: uint, ncols: uint, plot_number: uint) -> (ok: bool) {
 	return
 }
 
+subplot2grid :: proc(
+	nrows: uint,
+	ncols: uint,
+	rowid: uint = 0,
+	colid: uint = 0,
+	rowspan: uint = 1,
+	colspan: uint = 1,
+) -> (
+	ok: bool,
+) {
+	interpreter_get()
+
+	shape: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(shape, 0, PyLong_FromLong(c.long(nrows)))
+	PyTuple_SetItem(shape, 1, PyLong_FromLong(c.long(ncols)))
+
+	loc: PyObject = PyTuple_New(2)
+	PyTuple_SetItem(loc, 0, PyLong_FromLong(c.long(rowid)))
+	PyTuple_SetItem(loc, 1, PyLong_FromLong(c.long(colid)))
+
+	args: PyObject = PyTuple_New(4)
+	PyTuple_SetItem(args, 0, shape)
+	PyTuple_SetItem(args, 1, loc)
+	PyTuple_SetItem(args, 2, PyLong_FromLong(c.long(rowspan)))
+	PyTuple_SetItem(args, 3, PyLong_FromLong(c.long(colspan)))
+
+	res: PyObject = PyObject_CallObject(interpreter_get().s_python_function_subplot2grid, args)
+
+	Py_DecRef(shape)
+	Py_DecRef(loc)
+	Py_DecRef(args)
+	ok = res != nil
+	if !ok {
+		fmt.eprintln("Call to subplot2grid() failed.")
+		return
+	}
+
+	Py_DecRef(res)
+	return
+}
+
+
 plot3 :: proc(
 	x: $T/[]$E,
 	y: $T1/[]$E1,

@@ -1,4 +1,4 @@
-examples: all bar animation basic colorbar fill_between fill imshow lines3d minimal quiver quiver3d spy subplot
+examples: all bar animation basic colorbar fill_between fill imshow lines3d minimal quiver quiver3d spy subplot subplot2grid
 
 .PHONY: all build_dirs python310 object shared build clear examples $(examples)
 
@@ -83,3 +83,6 @@ spy:
 
 subplot:
 	odin build examples/subplot.odin -file -out=$(BIN_OUT)/subplot
+
+subplot2grid:
+	odin build examples/subplot2grid.odin -file -out=$(BIN_OUT)/subplot2grid
