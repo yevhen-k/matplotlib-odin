@@ -104,14 +104,34 @@ Interpreter* interpreter_get() {
 
         Py_Initialize();
         
-        wchar_t const *dummy_args[] = {L"Python", NULL};  // const is needed because literals must not be modified
-        wchar_t const **argv = dummy_args;
-        int             argc = sizeof(dummy_args)/sizeof(dummy_args[0])-1;
+        #if PY_MINOR_VERSION < 11
         
-        #if PY_MAJOR_VERSION >= 3
-        PySys_SetArgv(argc, (wchar_t **)(argv));
+            wchar_t const *dummy_args[] = {L"Python", NULL};  // const is needed because literals must not be modified
+            wchar_t const **argv = dummy_args;
+            int             argc = sizeof(dummy_args)/sizeof(dummy_args[0])-1;
+            PySys_SetArgv(argc, (wchar_t **)(argv));
+        
         #else
-        PySys_SetArgv(argc, (char **)(argv));
+
+            PyStatus status;
+            PyConfig config;
+            PyConfig_InitPythonConfig(&config);
+            config.isolated = 1;
+
+            wchar_t const* dummy_args[] = { L"Python", NULL };  // const is needed because literals must not be modified
+            wchar_t* const* argv = (wchar_t**)(dummy_args);
+            int             argc = sizeof(dummy_args) / sizeof(dummy_args[0]) - 1;
+            if (argc && argv) {
+                status = PyConfig_SetArgv(&config, argc, argv);
+                if (PyStatus_Exception(status)) {
+                    PyConfig_Clear(&config);
+                }
+            }
+            status = Py_InitializeFromConfig(&config);
+            if (PyStatus_Exception(status)) {
+                PyConfig_Clear(&config);
+            }
+            PyConfig_Clear(&config);
         #endif
         
         import_numpy(); // initialize numpy C-API
