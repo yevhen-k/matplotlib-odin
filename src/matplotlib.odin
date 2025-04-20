@@ -5,10 +5,21 @@ import "core:c"
 import "core:fmt"
 import "core:strings"
 
+PY_VER :: #config(PY_VER, -1)
 
 when ODIN_OS == .Linux {
 	foreign import plt "../build/lib/libmatplotlib.so"
-	foreign import py "system:libpython3.10.so"
+	when PY_VER == 3.10 {
+		foreign import py "system:libpython3.10.so"
+	} else when PY_VER == 3.11 {
+		foreign import py "system:libpython3.11.so"
+	} else when PY_VER == 3.12 {
+		foreign import py "system:libpython3.12.so"
+	}else when PY_VER == 3.13 {
+		foreign import py "system:libpython3.13.so"
+	} else {
+		#panic("Undefined PY_VER var or unsupported python version")
+	}
 }
 
 // @(private = "package")
@@ -20,6 +31,7 @@ PyArrayObject :: distinct rawptr
 
 @(private = "package")
 Interpreter :: struct {
+	// TODO: implement
 	s_python_function_arrow:           PyObject,
 	s_python_function_show:            PyObject,
 	s_python_function_close:           PyObject,
@@ -31,50 +43,72 @@ Interpreter :: struct {
 	s_python_function_plot:            PyObject,
 	s_python_function_quiver:          PyObject,
 	s_python_function_contour:         PyObject,
+	// TODO: implement
 	s_python_function_semilogx:        PyObject,
+	// TODO: implement
 	s_python_function_semilogy:        PyObject,
+	// TODO: implement
 	s_python_function_loglog:          PyObject,
 	s_python_function_fill:            PyObject,
 	s_python_function_fill_between:    PyObject,
+	// TODO: implement
 	s_python_function_hist:            PyObject,
 	s_python_function_imshow:          PyObject,
+	// TODO: implement
 	s_python_function_scatter:         PyObject,
+	// TODO: implement
 	s_python_function_boxplot:         PyObject,
 	s_python_function_subplot:         PyObject,
 	s_python_function_subplot2grid:    PyObject,
 	s_python_function_legend:          PyObject,
 	s_python_function_xlim:            PyObject,
 	s_python_function_ion:             PyObject,
+	// TODO: implement
 	s_python_function_ginput:          PyObject,
 	s_python_function_ylim:            PyObject,
 	s_python_function_title:           PyObject,
 	s_python_function_axis:            PyObject,
+	// TODO: implement
 	s_python_function_axhline:         PyObject,
+	// TODO: implement
 	s_python_function_axvline:         PyObject,
+	// TODO: implement
 	s_python_function_axvspan:         PyObject,
 	s_python_function_xlabel:          PyObject,
 	s_python_function_ylabel:          PyObject,
 	s_python_function_gca:             PyObject,
+	// TODO: implement
 	s_python_function_xticks:          PyObject,
+	// TODO: implement
 	s_python_function_yticks:          PyObject,
+	// TODO: implement
 	s_python_function_margins:         PyObject,
+	// TODO: implement
 	s_python_function_tick_params:     PyObject,
 	s_python_function_grid:            PyObject,
+	// TODO: implement
 	s_python_function_cla:             PyObject,
 	s_python_function_clf:             PyObject,
+	// TODO: implement
 	s_python_function_errorbar:        PyObject,
+	// TODO: implement
 	s_python_function_annotate:        PyObject,
+	// TODO: implement
 	s_python_function_tight_layout:    PyObject,
 	s_python_colormap:                 PyObject,
 	s_python_empty_tuple:              PyObject,
+	// TODO: implement
 	s_python_function_stem:            PyObject,
 	s_python_function_xkcd:            PyObject,
 	s_python_function_text:            PyObject,
 	s_python_function_suptitle:        PyObject,
 	s_python_function_bar:             PyObject,
+	// TODO: implement
 	s_python_function_barh:            PyObject,
 	s_python_function_colorbar:        PyObject,
+	// TODO: implement
 	s_python_function_subplots_adjust: PyObject,
+	// TODO: implement
 	s_python_function_rcparams:        PyObject,
 	s_python_function_spy:             PyObject,
 }
