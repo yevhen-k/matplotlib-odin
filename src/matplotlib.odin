@@ -15,11 +15,26 @@ when ODIN_OS == .Linux {
 		foreign import py "system:libpython3.11.so"
 	} else when PY_VER == 3.12 {
 		foreign import py "system:libpython3.12.so"
-	}else when PY_VER == 3.13 {
+	} else when PY_VER == 3.13 {
 		foreign import py "system:libpython3.13.so"
 	} else {
 		#panic("Undefined PY_VER var or unsupported python version")
 	}
+} else when ODIN_OS == .Windows {
+	foreign import plt "../build/lib/matplotlib.lib"
+	when PY_VER == 310 {
+		foreign import py "system:python310.lib"
+	} else when PY_VER == 311 {
+		foreign import py "system:python311.lib"
+	} else when PY_VER == 312 {
+		foreign import py "system:python312.lib"
+	} else when PY_VER == 313 {
+		foreign import py "system:python313.lib"
+	} else {
+		#panic("Undefined PY_VER var or unsupported python version")
+	}
+} else {
+	#panic("Unsuported OS.")
 }
 
 // @(private = "package")
