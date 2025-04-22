@@ -2,8 +2,6 @@
 
 This project binds Matplotlib library to the Odin language.
 
-This is initial stage of the project and testing the idea on linux and python3.10. Other version of python and OS will be added later.
-
 The idea is completely stolen from [lava/matplotlib-cpp](https://github.com/lava/matplotlib-cpp)
 
 <img src="./examples/animation.gif" width="45%"></img> <img src="./examples/fill_between.png" width="45%"></img> <img src="./examples/fill.png" width="45%"></img> <img src="./examples/surface.png" width="45%"></img> <img src="./examples/subplot2grid.png" width="45%"></img> <img src="./examples/lines3d.png" width="45%"></img> 
