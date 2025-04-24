@@ -25,13 +25,16 @@ object:
 	-I$(CUR_DIR)/$(INCLUDE_NUMPY) \
 	src/lib/matplotlib.c -o $(LIB_OUT)/matplotlib.o
 
+static: object
+	ar rcs $(LIB_OUT)/libmatplotlib.a $(LIB_OUT)/matplotlib.o
+
 shared: object
 	gcc -shared -o \
 	$(LIB_OUT)/libmatplotlib.so \
 	$(LIB_OUT)/matplotlib.o \
 	$(LINK)
 
-build: shared
+build: shared static
 
 build_test: shared
 	odin build src/ -out=$(BIN_OUT)/matplotlib && \

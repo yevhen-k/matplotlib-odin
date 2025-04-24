@@ -8,7 +8,7 @@ import "core:strings"
 PY_VER :: #config(PY_VER, -1)
 
 when ODIN_OS == .Linux {
-	foreign import plt "../build/lib/libmatplotlib.so"
+	foreign import plt "../build/lib/libmatplotlib.a"
 	when PY_VER == 3.10 {
 		foreign import py "system:libpython3.10.so"
 	} else when PY_VER == 3.11 {
